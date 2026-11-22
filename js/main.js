@@ -1,0 +1,26 @@
+import * as THREE from 'three';
+import {makeHeights,makeTerrain,makeTrees} from './terrain.js';
+import {Water} from './water-system.js';
+import {makeSky,makeClouds,drift} from './world.js';
+import {setupCamera} from './camera.js';
+import {Sim} from './simulation.js';
+import {initUI} from './ui.js';
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:devicePixelRatio<2});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0xc9dbe8,220,560);
+const camera=new THREE.PerspectiveCamera(55,1,.5,1500);
+scene.add(makeSky());
+const envScene=new THREE.Scene();envScene.add(makeSky());
+const env=new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
+scene.add(new THREE.HemisphereLight(0xbcd6f0,0x4a4030,.9));
+const sun=new THREE.DirectionalLight(0xfff1d6,2.4);sun.position.set(90,120,60);sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-120,right:120,top:120,bottom:-120,near:10,far:400});sun.shadow.bias=-.0005;sun.shadow.normalBias=.5;scene.add(sun);
+const H=makeHeights(),water=new Water(H,env);
+scene.add(makeTerrain(H),water.mesh,makeTrees(H,water.W));
+const clouds=makeClouds();scene.add(clouds);
+const cam=setupCamera(camera,canvas),sim=new Sim(water);initUI({sim,water,cam});
+function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+const clock=new THREE.Clock();
+renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),.1);sim.update(dt);water.update(sim.time);if(sim.running)drift(clouds,dt*sim.speed);cam.update(dt);renderer.render(scene,camera)});

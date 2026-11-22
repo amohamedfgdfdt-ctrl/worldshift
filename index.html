@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TERRA</title><link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script></head>
+<body><canvas id="gl"></canvas>
+<header id="top"><b class="logo">TERRA</b><span id="st">يعمل ×1</span><button id="wp">💧 المياه</button></header>
+<section id="panel"><h2>أدوات المياه</h2>
+<button id="src" class="on">المصدر: يعمل</button>
+<label>سرعة التدفق <input id="flow" type="range" min=".5" max="4" step=".5" value="1"></label>
+<label>قوة المصدر <input id="rate" type="range" min=".1" max="1.5" step=".1" value=".5"></label>
+<button id="rain">🌧️ إضافة أمطار</button></section>
+<footer id="bot"><button id="pp">⏸</button><button class="sp on" data-s="1">×1</button><button class="sp" data-s="2">×2</button><button class="sp" data-s="4">×4</button><button id="cam">🎥 الكاميرا</button><button id="rw">↺ إعادة</button></footer>
+<script type="module" src="js/main.js"></script></body></html>
