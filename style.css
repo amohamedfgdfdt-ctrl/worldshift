@@ -17,3 +17,4 @@ button:hover{background:rgba(255,255,255,.12)}
 button:active{transform:scale(.96)}
 button.on{border-color:var(--a);background:rgba(139,124,246,.22)}
 #bot button{flex:1 0 auto}
+.tools{display:flex;gap:6px}.tools button{flex:1}.hint{font-size:11px;color:var(--m);margin:0}

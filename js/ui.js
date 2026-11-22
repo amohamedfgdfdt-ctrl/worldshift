@@ -8,4 +8,5 @@ $('#wp').onclick=()=>$('#panel').classList.toggle('open');
 $('#src').onclick=e=>{water.srcOn=!water.srcOn;e.target.classList.toggle('on',water.srcOn);e.target.textContent='المصدر: '+(water.srcOn?'يعمل':'متوقف')};
 $('#flow').oninput=e=>water.flow=+e.target.value;
 $('#rate').oninput=e=>water.rate=+e.target.value;
-$('#rain').onclick=()=>water.rain()}
+$('#rain').onclick=()=>water.rain();
+all('.tl').forEach(b=>b.onclick=()=>{const on=sim.tool!=b.dataset.t;sim.tool=on?b.dataset.t:null;all('.tl').forEach(x=>x.classList.toggle('on',on&&x==b))})}
