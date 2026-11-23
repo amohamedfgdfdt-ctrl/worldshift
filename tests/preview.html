@@ -1,0 +1,13 @@
+<!doctype html><html><body style="margin:0"><canvas id="gl" style="width:100vw;height:100vh;display:block"></canvas>
+<script type="module">
+import { World } from '../js/world.js';
+import { Simulation } from '../js/simulation.js';
+window.addEventListener('error', e => { window.__err = (window.__err||'') + e.message + '\n'; });
+const w = new World(document.getElementById('gl'));
+w.build(7);
+const sim = new Simulation(w);
+window.w = w; window.sim = sim;
+let last = performance.now();
+function loop(t){ const dt=(t-last)/1000; last=t; sim.update(dt); w.frame(dt, sim); requestAnimationFrame(loop);} requestAnimationFrame(loop);
+window.__ready = true;
+</script></body></html>

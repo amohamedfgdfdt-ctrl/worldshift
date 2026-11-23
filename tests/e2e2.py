@@ -1,0 +1,70 @@
+import asyncio, json
+from playwright.async_api import async_playwright
+async def main():
+    async with async_playwright() as p:
+        b = await p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox','--use-angle=swiftshader','--use-gl=angle','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])
+        pg = await b.new_page(viewport={'width':1100,'height':620}); pg.set_default_timeout(10000)
+        errs=[]; pg.on('pageerror', lambda e: errs.append(str(e)))
+        await pg.goto('http://localhost:8123/index.html'); await pg.wait_for_function('window.__terraReady===true')
+        ev=pg.evaluate
+        await ev("localStorage.clear()"); await pg.reload(); await pg.wait_for_function('window.__terraReady===true')
+        await ev("TERRA.settings.apply({quality:'low'})"); await pg.wait_for_timeout(1500)
+        async def ck(sel): await ev('(s)=>document.querySelector(s).click()', sel)
+        scr = """([x,y,z])=>{const T=TERRA; const v=new T.world.rig.camera.position.constructor(x,y,z).project(T.world.rig.camera); const r=T.world.canvas.getBoundingClientRect(); return {x:r.left+(v.x*.5+.5)*r.width, y:r.top+(-v.y*.5+.5)*r.height}}"""
+        res=[]
+        def ok(c,m,e=''): res.append(c); print('PASS' if c else 'FAIL', m, e)
+        y0=await ev('TERRA.world.rig.cur.yaw'); await pg.mouse.move(700,300); await pg.mouse.down(); await pg.mouse.move(800,320,steps=8); await pg.mouse.up(); await pg.wait_for_timeout(700)
+        y1=await ev('TERRA.world.rig.cur.yaw'); ok(abs(y1-y0)>0.2,'camera drag rotates',f'{y0:.2f}->{y1:.2f}')
+        d0=await ev('TERRA.world.rig.cur.dist'); await pg.mouse.wheel(0,-400); await pg.wait_for_timeout(900); d1=await ev('TERRA.world.rig.cur.dist'); ok(d1<d0-10,'wheel zoom',f'{d0:.0f}->{d1:.0f}')
+        await pg.mouse.move(700,300); await pg.mouse.down(button='right'); await pg.mouse.move(600,260,steps=6); await pg.mouse.up(button='right'); await pg.wait_for_timeout(700)
+        tx=await ev('TERRA.world.rig.cur.target.x'); ok(abs(tx)>1,'right-drag pans',f'{tx:.1f}')
+        # touch-like: two pointer pinch via CDP is complex; test API path through controls events instead
+        await ck('[data-cam=reset]'); await pg.wait_for_timeout(1500)
+        # pour
+        await ck('[data-cat=water]'); await pg.wait_for_timeout(500); await ck('.card[data-tool=pour]'); await pg.wait_for_timeout(300)
+        spot=await ev("(()=>{const f=TERRA.world.field; for(let j=45;j<90;j+=2) for(let i=30;i<100;i+=2){const k=j*129+i; if(f.initialWater[k]===0&&f.slope[k]>0.08&&f.slope[k]<0.3&&f.h[k]<25) return [i*3-192,f.h[k],j*3-192];}})()")
+        s=await ev(scr,spot); print('pour spot screen',s, spot)
+        await ev("TERRA.sim.setRunning(false)")
+        v0=await ev('TERRA.world.water.totalVolume()')
+        await pg.mouse.move(s['x'],s['y'],steps=3); await pg.wait_for_timeout(500)
+        print('hit',await ev('TERRA.tools.hit'), 'mode', await ev('TERRA.tools.mode'), 'brushMode', await ev('TERRA.controls.brushMode'))
+        await pg.mouse.down(); await pg.wait_for_timeout(1500); print('brushOn',await ev('TERRA.tools.brushOn')); await pg.mouse.up(); await pg.wait_for_timeout(300)
+        v1=await ev('TERRA.world.water.totalVolume()'); ok(v1>v0+20,'hold-to-pour adds water while paused',f'{v0:.0f}->{v1:.0f}')
+        await ev("TERRA.sim.setRunning(true); TERRA.sim.setSpeed(4)"); await pg.wait_for_timeout(2500)
+        await pg.screenshot(path='/tmp/e2e_pour.png')
+        # source
+        await ck('.card[data-tool=source]'); await pg.wait_for_timeout(300)
+        spot2=[spot[0]+24,0,spot[2]]; spot2[1]=await ev(f"TERRA.world.field.heightAt({spot2[0]},{spot2[2]})")
+        s2=await ev(scr,spot2); n0=await ev('TERRA.world.water.sources.length')
+        await pg.mouse.move(s2['x'],s2['y'],steps=3); await pg.wait_for_timeout(500); print('hint',await ev('document.getElementById("hint").textContent'))
+        await pg.mouse.click(s2['x'],s2['y']); await pg.wait_for_timeout(500)
+        n1=await ev('TERRA.world.water.sources.length'); ok(n1==n0+1,'place water source',f'{n0}->{n1}')
+        await pg.keyboard.press('Escape')
+        # select the source & change rate & delete
+        s3=await ev(scr,[spot2[0],spot2[1]+1.2,spot2[2]]); await pg.mouse.click(s3['x'],s3['y']); await pg.wait_for_timeout(600)
+        sel=await ev('TERRA.tools.selection'); ok(sel and sel['kind']=='source','select source',json.dumps(sel))
+        await ev("(()=>{const e=document.querySelector('[data-src-rate]'); e.value=12; e.dispatchEvent(new Event('input',{bubbles:true}))})()")
+        ok(abs(await ev('TERRA.world.water.sources[TERRA.world.water.sources.length-1].rate')-12)<1e-6,'source strength slider')
+        await ck('[data-info=delete]'); await pg.wait_for_timeout(300)
+        ok(await ev('TERRA.world.water.sources.length')==n0,'delete source')
+        # click water selects water, terrain selects terrain
+        lake=await ev("(()=>{const l=TERRA.world.field.lake;const x=l.u*384-192,z=l.v*384-192;return [x,TERRA.world.field.heightAt(x,z)+TERRA.world.water.depthAt(x,z),z]})()")
+        sl=await ev(scr,lake); await pg.mouse.click(sl['x'],sl['y']); await pg.wait_for_timeout(500)
+        sel=await ev('TERRA.tools.selection'); ok(sel and sel['kind']=='water','click lake selects water',json.dumps(sel)); print(await ev('document.getElementById("info-dyn").innerText'))
+        # touch emulation: tap + two-finger pinch using CDP touch events
+        cdp=await pg.context.new_cdp_session(pg)
+        async def touch(t,pts): await cdp.send('Input.dispatchTouchEvent',{'type':t,'touchPoints':pts})
+        z0=await ev('TERRA.world.rig.goal.dist')
+        await touch('touchStart',[{'x':500,'y':300,'id':1},{'x':600,'y':300,'id':2}])
+        for k in range(1,9): await touch('touchMove',[{'x':500-k*10,'y':300,'id':1},{'x':600+k*10,'id':2,'y':300}]); await pg.wait_for_timeout(30)
+        await touch('touchEnd',[]); await pg.wait_for_timeout(300)
+        z1=await ev('TERRA.world.rig.goal.dist'); ok(z1<z0-20,'two-finger pinch zooms',f'{z0:.0f}->{z1:.0f}')
+        y0=await ev('TERRA.world.rig.goal.yaw')
+        await touch('touchStart',[{'x':500,'y':300,'id':1}])
+        for k in range(1,9): await touch('touchMove',[{'x':500+k*12,'y':300+k*3,'id':1}]); await pg.wait_for_timeout(30)
+        await touch('touchEnd',[]); await pg.wait_for_timeout(200)
+        y1=await ev('TERRA.world.rig.goal.yaw'); ok(abs(y1-y0)>0.2,'one-finger drag rotates',f'{y0:.2f}->{y1:.2f}')
+        ok(not errs,'no page errors',str(errs[:3]))
+        print('SUMMARY',sum(res),'/',len(res))
+        await b.close()
+asyncio.run(main())

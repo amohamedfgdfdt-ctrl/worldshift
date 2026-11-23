@@ -1,36 +1,91 @@
-import * as THREE from 'three';
-import {G,CELL,HALF,makeHeights,makeTerrain,makeTrees,refreshTerrain,uTime} from './terrain.js';
-import {Water} from './water-system.js';
-import {makeSky,makeClouds,drift} from './world.js';
-import {setupCamera} from './camera.js';
-import {Sim} from './simulation.js';
-import {initUI} from './ui.js';
-const canvas=document.getElementById('gl');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:devicePixelRatio<2});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
-const scene=new THREE.Scene();scene.fog=new THREE.Fog(0xc9dbe8,220,560);
-const camera=new THREE.PerspectiveCamera(55,1,.5,1500);
-scene.add(makeSky());
-const envScene=new THREE.Scene();envScene.add(makeSky());
-const env=new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
-scene.add(new THREE.HemisphereLight(0xbcd6f0,0x4a4030,.9));
-const sun=new THREE.DirectionalLight(0xfff1d6,2.4);sun.position.set(90,120,60);sun.castShadow=true;
-sun.shadow.mapSize.set(innerWidth>800?2048:1024,innerWidth>800?2048:1024);Object.assign(sun.shadow.camera,{left:-120,right:120,top:120,bottom:-120,near:10,far:400});sun.shadow.bias=-.0005;sun.shadow.normalBias=.5;scene.add(sun);
-const H=makeHeights(),water=new Water(H,env);
-const ter=makeTerrain(H);scene.add(ter,water.mesh,makeTrees(H,water.W));
-const clouds=makeClouds();scene.add(clouds);
-const cam=setupCamera(camera,canvas),sim=new Sim(water);initUI({sim,water,cam});
-function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
-addEventListener('resize',resize);resize();
-const clock=new THREE.Clock();
-renderer.setAnimationLoop(()=>{const dt=Math.min(clock.getDelta(),.1);sim.update(dt);uTime.value=sim.time;water.update(sim.time);if(sim.running)drift(clouds,dt*sim.speed);cam.update(dt);renderer.render(scene,camera)});
+// Entry point: wires every system together and runs the frame loop.
+import { World } from './world.js';
+import { Simulation } from './simulation.js';
+import { Controls } from './controls.js';
+import { Tools } from './tools.js';
+import { SaveSystem } from './save-system.js';
+import { UI } from './ui.js';
+import { PerformanceMonitor } from './performance.js';
+import { windUniforms } from './vegetation.js';
+import { DEFAULT_SEED, isTouchDevice } from './config.js';
 
-const ray=new THREE.Raycaster(),mv=new THREE.Vector2();let down=null;
-canvas.addEventListener('pointerdown',e=>down={x:e.clientX,y:e.clientY,t:performance.now()});
-canvas.addEventListener('pointerup',e=>{if(!down||!sim.tool)return;const mvd=Math.hypot(e.clientX-down.x,e.clientY-down.y),el=performance.now()-down.t;down=null;if(mvd>8||el>350)return;
-mv.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(mv,camera);const hit=ray.intersectObject(ter)[0];if(!hit)return;
-const ci=(hit.point.x+HALF)/CELL,cj=(hit.point.z+HALF)/CELL;let edit=false;
-for(let j=Math.max(0,Math.floor(cj)-4);j<=Math.min(G-1,Math.ceil(cj)+4);j++)for(let i=Math.max(0,Math.floor(ci)-4);i<=Math.min(G-1,Math.ceil(ci)+4);i++){
-const f=Math.exp(-((i-ci)**2+(j-cj)**2)/6),a=j*G+i;
-if(sim.tool=='pour')water.W[a]+=3*f;else if(sim.tool=='dig'){H[a]=Math.max(.5,H[a]-1.2*f);edit=true}else{H[a]=Math.min(45,H[a]+1.2*f);edit=true}}
-if(edit)refreshTerrain(ter,H)});
+function webglOk() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2'));
+  } catch { return false; }
+}
+
+async function boot() {
+  const loading = document.getElementById('loading');
+  if (!webglOk()) {
+    loading.classList.add('done');
+    document.getElementById('nogl').hidden = false;
+    return;
+  }
+  // let the loading screen paint before the (synchronous) world generation
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  const canvas = document.getElementById('gl');
+  const world = new World(canvas, { quality: 'auto' });
+  const sim = new Simulation(world);
+  const controls = new Controls(canvas, world.rig);
+  const tools = new Tools(world, controls);
+  const perf = new PerformanceMonitor(world);
+
+  const settingsState = { wind: 0.6, cloud: 0.45, grid: false, quality: 'auto' };
+  const settings = {
+    get: () => ({ ...settingsState }),
+    apply(o) {
+      if (o.wind !== undefined) { settingsState.wind = o.wind; world.wind = o.wind; windUniforms.uWind.value = o.wind; }
+      if (o.cloud !== undefined) { settingsState.cloud = o.cloud; world.cloud = o.cloud; }
+      if (o.grid !== undefined) { settingsState.grid = !!o.grid; tools.setGridAlways(!!o.grid); }
+      if (o.quality !== undefined && o.quality !== settingsState.quality) {
+        settingsState.quality = o.quality;
+        world.qualityMode = o.quality;
+        world.applyQuality(o.quality === 'auto' ? (isTouchDevice ? 'balanced' : 'high') : o.quality);
+      }
+      if (o.save !== false) save?.markDirty();
+    },
+  };
+  windUniforms.uWind.value = settingsState.wind;
+  const save = new SaveSystem({ world, sim, tools, settings });
+  const ui = new UI({ world, sim, tools, controls, save, perf, settings });
+
+  // restore the last world or start the default one
+  let restored = false;
+  if (save.hasSave()) {
+    try { restored = save.load(); } catch (e) { console.error(e); restored = false; }
+    if (restored) { document.getElementById('load-text').textContent = 'Welcome back'; }
+  }
+  if (!restored) world.build(DEFAULT_SEED);
+
+  window.addEventListener('resize', () => world.resize());
+  window.addEventListener('orientationchange', () => setTimeout(() => world.resize(), 200));
+  new ResizeObserver(() => world.resize()).observe(canvas);
+
+  // debug / test hook (harmless in production)
+  window.TERRA = { world, sim, tools, controls, ui, save, perf, settings };
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, Math.max(0.0001, (now - last) / 1000));
+    last = now;
+    controls.update(dt);
+    sim.update(dt);
+    tools.update(dt);
+    world.frame(dt, sim);
+    ui.update(dt);
+    perf.update(dt);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  setTimeout(() => loading.classList.add('done'), 350);
+  window.__terraReady = true;
+}
+
+boot().catch((e) => {
+  console.error(e);
+  const t = document.getElementById('load-text');
+  if (t) t.textContent = 'Something went wrong: ' + e.message;
+});
