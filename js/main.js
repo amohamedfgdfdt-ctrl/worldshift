@@ -5,6 +5,7 @@ import { Controls } from './controls.js';
 import { Tools } from './tools.js';
 import { SaveSystem } from './save-system.js';
 import { UI } from './ui.js';
+import { initI18n } from './i18n.js';
 import { PerformanceMonitor } from './performance.js';
 import { windUniforms } from './vegetation.js';
 import { DEFAULT_SEED, isTouchDevice } from './config.js';
@@ -18,6 +19,7 @@ function webglOk() {
 
 async function boot() {
   const loading = document.getElementById('loading');
+  initI18n();
   if (!webglOk()) {
     loading.classList.add('done');
     document.getElementById('nogl').hidden = false;
@@ -33,12 +35,13 @@ async function boot() {
   const tools = new Tools(world, controls);
   const perf = new PerformanceMonitor(world);
 
-  const settingsState = { wind: 0.6, cloud: 0.45, grid: false, quality: 'auto' };
+  const settingsState = { wind: 0.6, cloud: 0.45, grid: false, quality: 'auto', fps: 60 };
   const settings = {
     get: () => ({ ...settingsState }),
     apply(o) {
       if (o.wind !== undefined) { settingsState.wind = o.wind; world.wind = o.wind; windUniforms.uWind.value = o.wind; }
       if (o.cloud !== undefined) { settingsState.cloud = o.cloud; world.cloud = o.cloud; }
+      if (o.fps !== undefined) { settingsState.fps = o.fps; perf.capMs = o.fps ? 1000 / o.fps : 0; }
       if (o.grid !== undefined) { settingsState.grid = !!o.grid; tools.setGridAlways(!!o.grid); }
       if (o.quality !== undefined && o.quality !== settingsState.quality) {
         settingsState.quality = o.quality;
@@ -49,6 +52,7 @@ async function boot() {
     },
   };
   windUniforms.uWind.value = settingsState.wind;
+  perf.capMs = 1000 / settingsState.fps;
   const save = new SaveSystem({ world, sim, tools, settings });
   const ui = new UI({ world, sim, tools, controls, save, perf, settings });
 
@@ -69,6 +73,8 @@ async function boot() {
 
   let last = performance.now();
   function frame(now) {
+    const cap = settingsState.fps;
+    if (cap && now - last < 1000 / cap - 2) { requestAnimationFrame(frame); return; }
     const dt = Math.min(0.1, Math.max(0.0001, (now - last) / 1000));
     last = now;
     controls.update(dt);

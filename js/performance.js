@@ -21,7 +21,7 @@ export class PerformanceMonitor {
     if (w.qualityMode !== 'auto') { this.scale = null; return; }
     const r = w.renderer;
     const cur = r.getPixelRatio();
-    if (this.ema > 31) { this.badTime += dt; this.goodTime = 0; } else if (this.ema < 19) { this.goodTime += dt; this.badTime = 0; } else { this.badTime = 0; this.goodTime = 0; }
+    if (this.ema > Math.max(31, (this.capMs || 0) * 1.25)) { this.badTime += dt; this.goodTime = 0; } else if (this.ema < 19) { this.goodTime += dt; this.badTime = 0; } else { this.badTime = 0; this.goodTime = 0; }
     if (this.badTime > 2.5) {
       this.badTime = 0;
       if (cur > this.minRatio + 0.01) {

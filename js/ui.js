@@ -1,6 +1,7 @@
 // DOM user interface: top bar, category rail, flyout panels, info panel,
 // camera buttons, simulation bar, action bar, toasts and dialogs.
 import { icon } from './icons.js';
+import { getLang, setLang } from './i18n.js';
 import { CATEGORIES, TYPES, typesOf } from './buildings.js';
 import { formatClock } from './utils.js';
 import { DEFAULT_SEED, CELL, N, VERTS, isTouchDevice } from './config.js';
@@ -214,7 +215,9 @@ export class UI {
     } else if (cat.id === 'world') {
       const s = this.settings.get();
       body = `
-        <div class="section" style="margin-top:0"><h4>Time & atmosphere</h4>
+        <div class="section" style="margin-top:0"><h4>Language</h4>
+          <div class="seg" id="seg-lang"><button data-lang="ar" class="${getLang() === 'ar' ? 'on' : ''}">العربية</button><button data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">English</button></div></div>
+        <div class="section"><h4>Time & atmosphere</h4>
           ${this._slider('hour', 'Time of day', 0, 24, 0.25, this.sim.hour, (v) => formatClock(v * 60))}
           ${this._switch('dayCycle', 'Day / night cycle', this.sim.dayCycle)}
           ${this._slider('wind', 'Wind', 0, 1.6, 0.05, s.wind, (v) => (+v).toFixed(2))}
@@ -224,6 +227,9 @@ export class UI {
         <div class="section"><h4>Graphics</h4>
           <div class="seg" id="seg-quality">${['auto', 'high', 'balanced', 'low'].map((q) => `<button data-q="${q}" class="${s.quality === q ? 'on' : ''}">${q[0].toUpperCase() + q.slice(1)}</button>`).join('')}</div>
           <p class="help" id="q-help">Auto lowers the resolution if the frame rate drops.</p>
+          <div class="kv" style="margin-top:8px"><span>Frame limit</span></div>
+          <div class="seg" id="seg-fps">${[[60, '60'], [30, '30'], [0, 'No limit']].map(([v, l]) => `<button data-fps="${v}" class="${s.fps === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <p class="help">A lower limit saves battery and heat.</p>
           <div class="kv"><span>Frame rate</span><b id="ws-fps">–</b></div>
           <div class="kv"><span>Resolution scale</span><b id="ws-res">–</b></div>
         </div>
@@ -285,6 +291,10 @@ export class UI {
       for (const b of $('#seg-quality').children) b.classList.toggle('on', b === q);
       return;
     }
+    const fp = e.target.closest('[data-fps]');
+    if (fp) { this.settings.apply({ fps: Number(fp.dataset.fps) }); for (const b of $('#seg-fps').children) b.classList.toggle('on', b === fp); return; }
+    const lg = e.target.closest('[data-lang]');
+    if (lg) { setLang(lg.dataset.lang); return; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     switch (a.dataset.act) {
