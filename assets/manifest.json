@@ -1,5 +1,13 @@
 {
   "version": 2,
   "decoders": { "path": "../vendor/decoders/" },
-  "assets": {}
+  "assets": {
+    "oak":   { "category": "tree",  "target": "oak",   "url": "models/oak.glb",   "dimensions": { "width": 10,  "height": 12,  "depth": 10 }, "fit": "height" },
+    "birch": { "category": "tree",  "target": "birch", "url": "models/birch.glb", "dimensions": { "width": 4,   "height": 11,  "depth": 4 },  "fit": "height" },
+    "pine":  { "category": "tree",  "target": "pine",  "url": "models/pine.glb",  "dimensions": { "width": 6,   "height": 14,  "depth": 5 },  "fit": "height" },
+    "tree":  { "category": "tree",  "target": "tree",  "url": "models/tree.glb",  "dimensions": { "width": 6,   "height": 8,   "depth": 6 },  "fit": "height" },
+    "bush":  { "category": "shrub", "target": "bush",  "url": "models/bush.glb",  "dimensions": { "width": 2.1, "height": 1.8, "depth": 1.9 }, "fit": "height" },
+    "reed":  { "category": "shrub", "target": "reed",  "url": "models/reed.glb" },
+    "rock":  { "category": "rock",  "target": "rock",  "url": "models/rock.glb",  "dimensions": { "width": 3,   "height": 2.2, "depth": 2.6 }, "fit": "footprint" }
+  }
 }

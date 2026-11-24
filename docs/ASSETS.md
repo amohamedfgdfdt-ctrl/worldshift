@@ -28,3 +28,20 @@ All decoders are loaded lazily, only when a model actually uses the extension, f
 - **Meshopt** (`EXT_meshopt_compression`): decoder module in `vendor/jsm/libs/` (25 KB). Decoder initialises; **not tested with a real meshopt-encoded file** (no encoder offline).
 - **KTX2 / Basis** (`KHR_texture_basisu`): `vendor/decoders/basis/` (WASM). Transcoder initialises; **not tested with a real .ktx2 texture** (no encoder offline).
 Produce compressed files with `gltf-transform` (`optimize --compress draco|meshopt --texture-compress ktx2`) or gltfpack.
+
+## Models currently in use (`assets/models/`)
+| file | target | source model | tris | note |
+|---|---|---|---|---|
+| `oak.glb` | tree / oak | broadleaf tree, textured (WebP) | 1319 | fitted to 12 m tall |
+| `birch.glb` | tree / birch | slim white-trunk tree | 1113 | fitted to 11 m |
+| `pine.glb` | tree / pine | fir, textured (WebP) | 438 | fitted to 14 m |
+| `tree.glb` | tree / tree (player planted) | small broadleaf, textured (WebP) | 901 | fitted to 8 m |
+| `bush.glb` | shrub / bush | multi-trunk shrub | 1003 | fitted to 1.8 m |
+| `reed.glb` | shrub / reed | cattail clump | 448 | native size |
+| `rock.glb` | rock / rock | mossy boulder | 560 | fitted to a 3 m footprint |
+
+Grass and flowers are intentionally still procedural: a 300+ triangle tuft multiplied by thousands of instances is too heavy for phones.
+
+**Source and licence:** the files carry the generator tag `3dassets.dev ingest`. Confirm the licence of that source before publishing, and add attribution here if it requires it.
+
+The files use `KHR_mesh_quantization` (integer positions with the scale in the node matrix) and `EXT_texture_webp`. `js/assets.js` converts quantized positions/normals to float before baking node transforms; without that step every model collapses into a 2×2×2 box (verified on these files).

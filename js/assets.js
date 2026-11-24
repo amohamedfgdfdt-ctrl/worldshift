@@ -220,6 +220,16 @@ export class AssetManager {
       if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      // KHR_mesh_quantization: positions/normals can be normalized integers whose scale lives in the
+      // node matrix. Baking the matrix into an integer attribute clamps it to [-1,1], so go to float first.
+      for (const name of ['position', 'normal']) {
+        const a = g.attributes[name];
+        if (a && !(a.array instanceof Float32Array)) {
+          const f = new THREE.BufferAttribute(new Float32Array(a.count * 3), 3);
+          for (let i = 0; i < a.count; i++) f.setXYZ(i, a.getX(i), a.getY(i), a.getZ(i));
+          g.setAttribute(name, f);
+        }
+      }
       g.applyMatrix4(o.matrixWorld);
       const groups = o.geometry.groups;
       if (mats.length > 1 && groups.length) {
