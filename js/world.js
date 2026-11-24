@@ -10,6 +10,11 @@ import { CameraRig } from './camera.js';
 import { Vegetation } from './vegetation.js';
 import { BuildingSystem } from './building-system.js';
 import { Emitter } from './utils.js';
+import { updateAtmosphere } from './atmosphere.js';
+import { RenderPipeline } from './pipeline.js';
+import { Particles } from './particles.js';
+import { windUniforms } from './vegetation.js';
+import { PRESETS } from './graphics.js';
 
 export const QUALITY = {
   high: { dpr: 2, shadow: 2048, label: 'High' },
@@ -23,7 +28,7 @@ export class World extends Emitter {
     this.canvas = canvas;
     const dpr = window.devicePixelRatio || 1;
     this.renderer = new THREE.WebGLRenderer({
-      canvas, antialias: dpr < 2, powerPreference: 'high-performance', alpha: false,
+      canvas, antialias: false, powerPreference: 'high-performance', alpha: false,
     });
     const r = this.renderer;
     r.shadowMap.enabled = true;
@@ -33,6 +38,10 @@ export class World extends Emitter {
     r.setClearColor(0x0b0d14);
 
     this.scene = new THREE.Scene();
+    this.gfx = { ...PRESETS.medium };
+    this.drsScale = 1;
+    this.caps = null;
+    this.pipeline = new RenderPipeline(this);
     this.textures = createTextures(256);
     const maxAniso = r.capabilities.getMaxAnisotropy();
     this.textures.normal.anisotropy = Math.min(4, maxAniso);
@@ -72,8 +81,8 @@ export class World extends Emitter {
 
     this.wind = 0.6;
     this.cloud = 0.45;
-    this.applyQuality(this.quality);
-    this.resize();
+    this.particles = new Particles(this.scene, this);
+    this.applyGraphics(this.gfx);
     this._frames = 0;
   }
 
@@ -99,30 +108,86 @@ export class World extends Emitter {
     this.emit('built');
   }
 
+  /** Legacy hook kept for old callers: maps the three old names onto presets. */
   applyQuality(q) {
-    this.quality = q;
-    const P = QUALITY[q];
-    this.pixelCap = P.dpr;
-    const r = this.renderer;
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, P.dpr));
-    const on = P.shadow > 0;
-    this.env.sun.castShadow = on;
-    if (on && this.env.shadowMapSize !== P.shadow) this.env.setShadowSize(P.shadow);
-    this.vegetation.setShadows(on && q === 'high');
-    this.vegetation.setDensity(q === 'high' ? 1 : q === 'balanced' ? 0.72 : 0.45);
-    this.buildings.setShadows(on);
+    const map = { high: 'high', balanced: 'medium', low: 'low' };
+    this.applyGraphics(PRESETS[map[q] || 'medium']);
+  }
+
+  /** Total pixel ratio = native DPR (capped at 2) x render scale x dynamic scale. */
+  pixelRatio() {
+    const base = Math.min(window.devicePixelRatio || 1, 2);
+    return Math.max(0.3, Math.min(2.5, base * this.gfx.renderScale * this.drsScale));
+  }
+
+  setDynamicScale(v) {
+    v = Math.max(0.5, Math.min(1, v));
+    if (Math.abs(v - this.drsScale) < 1e-3) return;
+    this.drsScale = v;
     this.resize();
   }
 
-  setPixelRatio(v) {
-    this.renderer.setPixelRatio(v);
+  /** Push a (sanitised) settings object into every real rendering system. */
+  applyGraphics(g, caps = this.caps) {
+    const prev = this.gfx;
+    this.gfx = { ...g };
+    if (caps) this.caps = caps;
+    const r = this.renderer;
+    const shadowOn = g.shadowRes > 0;
+    // --- shadows
+    this.env.sun.castShadow = shadowOn;
+    if (shadowOn && this.env.shadowMapSize !== g.shadowRes) this.env.setShadowSize(g.shadowRes);
+    const types = [THREE.BasicShadowMap, THREE.PCFShadowMap, THREE.PCFSoftShadowMap];
+    const type = types[g.shadowQuality] ?? THREE.PCFShadowMap;
+    if (r.shadowMap.type !== type) {
+      r.shadowMap.type = type;
+      this.scene.traverse((o) => { const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach((x) => { x.needsUpdate = true; }); });
+    }
+    this.env.sun.shadow.radius = [1, 2, 3][g.shadowQuality] ?? 2;
+    this.buildings.setShadows(shadowOn);
+    this.vegetation.setShadows(shadowOn && g.foliageQuality >= 2);
+    // --- vegetation
+    this.vegetation.setDensity(g.vegDensity);
+    this.particles?.setDensity(g.particles);
+    // --- terrain and textures
+    this.terrain.uniforms.uDetailLvl.value = g.terrainDetail;
+    const ns = [0.0, 0.5, 0.9][g.terrainDetail] ?? 0.5;
+    this.terrain.material.normalScale.set(ns, ns);
+    this.terrain.uniforms.uWaterQ.value = g.waterQuality;
+    const maxA = this.renderer.capabilities.getMaxAnisotropy();
+    const aniso = [1, Math.min(4, maxA), Math.min(16, maxA)][g.textureQuality] ?? 1;
+    for (const t of [this.textures.normal, this.textures.waterNormal, this.textures.detail]) {
+      if (t.anisotropy !== aniso) { t.anisotropy = aniso; t.needsUpdate = true; }
+    }
+    // --- water (visual only; the flow simulation is untouched)
+    this.waterMesh.setQuality(g.waterQuality, g.reflectionQuality);
+    // --- draw distance
+    const dd = g.drawDistance;
+    this.vegetation.cullTree.value = 620 * dd;
+    this.vegetation.cullGrass.value = 175 * dd;
+    this.vegetation.lodDist = (g.foliageQuality >= 2 ? 150 : g.foliageQuality === 1 ? 110 : 70) * dd;
+    this.env.fogDensityBase = 0.0014 / dd;
+    this.scene.fog.density = this.env.fogDensityBase;
+    // --- pipeline + resolution
+    this.pipeline.configure(g, this.caps || { float: true, maxSamples: 4 });
     this.resize();
+    this.emit('graphics', g, prev);
   }
+
+  /** After external assets replaced instance sets: re-apply the shadow and density settings to the new sets. */
+  refreshAssetState() {
+    const g = this.gfx, on = g.shadowRes > 0;
+    this.buildings.setShadows(on);
+    this.vegetation.setShadows(on && g.foliageQuality >= 2);
+    this.vegetation.setDensity(g.vegDensity);
+  }
+
+  setPixelRatio(v) { this.drsScale = v; this.resize(); }
 
   resize() {
     const c = this.canvas;
     const w = Math.max(1, c.clientWidth), h = Math.max(1, c.clientHeight);
-    this.renderer.setSize(w, h, false);
+    this.pipeline.setSize(w, h, this.pixelRatio());
     this.rig.resize(w, h);
     this.viewH = h;
   }
@@ -171,6 +236,19 @@ export class World extends Emitter {
     }
     this.buildings.update(dt);
     this._frames++;
-    this.renderer.render(this.scene, this.rig.camera);
+    this.vegetation.updateLod(this.rig.camera.position);
+    for (const st of Object.values(this.buildings.sets)) st.updateLod?.(this.rig.camera.position);
+    windUniforms.uWind.value = this.gfx.foliageQuality > 0 ? this.wind : 0;
+    this.scene.fog.density = this.env.fogDensityBase ?? 0.0014;
+    this.rig.camera.updateMatrixWorld();
+    updateAtmosphere(this.rig.camera, this.env, this.gfx.volumetric);
+    // linear-space fog (post-processing path) looks heavier than display-space fog (direct path); match them
+    if (this.pipeline.mode === 'composer') this.scene.fog.density *= 0.6;
+    this.particles.update(dt, this.buildings, this.env, this.wind);
+    const t0 = performance.now();
+    this.perf?.gpuBegin();
+    this.pipeline.render(dt);
+    this.perf?.gpuEnd();
+    this.renderMs = performance.now() - t0;
   }
 }

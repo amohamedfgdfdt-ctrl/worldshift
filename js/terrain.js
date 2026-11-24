@@ -3,6 +3,7 @@
 // buildable-grid overlay).
 
 import * as THREE from '../vendor/three.module.min.js';
+import { injectAtmosphere } from './atmosphere.js';
 import { CELL, N, VERTS, SIZE, HALF, DEFAULT_SEED } from './config.js';
 import { Noise2D, mulberry32, clamp, lerp, smoothstep } from './utils.js';
 
@@ -278,6 +279,8 @@ export class TerrainMesh {
       uCursor: { value: new THREE.Vector2(0, 0) },
       uCursorR: { value: 60 },
       uTime: { value: 0 },
+      uDetailLvl: { value: 2 },
+      uWaterQ: { value: 2 },
     };
 
     this.geometry = this._buildGeometry();
@@ -340,6 +343,7 @@ export class TerrainMesh {
     const u = this.uniforms;
     m.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, u);
+      injectAtmosphere(shader);
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vWorldP;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorldP = position;');
@@ -347,6 +351,7 @@ export class TerrainMesh {
         .replace('#include <common>', `#include <common>
 varying vec3 vWorldP;
 uniform sampler2D uDetail; uniform sampler2D uCellTex; uniform sampler2D uWaterTex;
+uniform float uDetailLvl; uniform float uWaterQ;
 uniform float uGrid; uniform vec2 uCursor; uniform float uCursorR; uniform float uTime;
 const float CELLW = ${CELL.toFixed(1)};
 const float HALFW = ${HALF.toFixed(1)};
@@ -356,13 +361,24 @@ const float NC = ${N.toFixed(1)};`)
   vec2 wp = vWorldP.xz;
   float d1 = texture2D(uDetail, wp * 0.083).r;
   float d2 = texture2D(uDetail, wp * 0.0171 + 0.37).r;
-  diffuseColor.rgb *= 0.62 + 0.62 * d1 * (0.6 + 0.8 * d2);
+  float full = 0.62 + 0.62 * d1 * (0.6 + 0.8 * d2);
+  float fine = texture2D(uDetail, wp * 0.37 + 0.11).r;
+  float rich = full * (0.82 + 0.36 * fine);
+  float basic = 0.85 + 0.15 * d2;
+  diffuseColor.rgb *= uDetailLvl < 0.5 ? basic : (uDetailLvl < 1.5 ? full : rich);
   vec2 wtuv = (((wp + HALFW) / (CELLW * NC)) * NC + 0.5) / (NC + 1.0);
   float wd = texture2D(uWaterTex, wtuv).g * 6.0;
   float wet = smoothstep(0.0, 0.04, wd);
   diffuseColor.rgb *= mix(1.0, 0.66, wet);
   float sub = smoothstep(0.15, 1.8, wd);
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.42, 0.62, 0.72), sub);
+  if (uWaterQ > 2.5 && sub > 0.01) {
+    vec2 cp = wp * 0.16;
+    float c1 = texture2D(uDetail, cp + vec2(uTime * 0.021, uTime * 0.013)).r;
+    float c2 = texture2D(uDetail, cp * 1.37 - vec2(uTime * 0.017, -uTime * 0.025)).r;
+    float caus = pow(clamp(1.0 - abs(c1 - c2) * 3.2, 0.0, 1.0), 5.0);
+    diffuseColor.rgb *= 1.0 + caus * 1.1 * sub * (1.0 - smoothstep(0.4, 2.6, wd));
+  }
 }`)
         .replace('#include <opaque_fragment>', `#include <opaque_fragment>
 if (uGrid > 0.001) {

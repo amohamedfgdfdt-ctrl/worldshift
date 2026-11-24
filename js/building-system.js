@@ -3,7 +3,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { CELL, N, VERTS, HALF } from './config.js';
 import { Emitter, clamp } from './utils.js';
-import { InstanceSet } from './instances.js';
+import { InstanceSet, LodInstanceSet } from './instances.js';
 import { TYPES, getGeometry, footprintSize, tintFor, buildFoundation, buildSourceMarker } from './buildings.js';
 
 const cellX = (c) => c * CELL - HALF;
@@ -94,6 +94,31 @@ export class BuildingSystem extends Emitter {
     this.ringGeo = new THREE.RingGeometry(0.82, 1, 40).rotateX(-Math.PI / 2);
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._v = new THREE.Vector3(); this._s = new THREE.Vector3(1, 1, 1);
     this._up = new THREE.Vector3(0, 1, 0);
+  }
+
+  /**
+   * Swap the model of a building type (e.g. GLB) and re-add every existing
+   * instance. `levels` = [{geometry, material, distance}] (one entry = no LOD).
+   */
+  replaceModel(key, levels, material) {
+    if (!Array.isArray(levels)) levels = [{ geometry: levels, material }];
+    const old = this.sets[key];
+    const t = TYPES[key];
+    const cap = t.cap || 100;
+    const fresh = levels.length > 1
+      ? new LodInstanceSet(levels, cap, { name: 'b-' + key })
+      : new InstanceSet(levels[0].geometry, levels[0].material, cap, { name: 'b-' + key });
+    fresh.mesh.castShadow = old.mesh.castShadow;
+    const m = new THREE.Matrix4(), c = new THREE.Color();
+    for (const id of old.ids) {
+      old.getMatrix(id, m);
+      old.getColor(id, c);
+      fresh.add(id, m, c);
+    }
+    for (const mesh of old.meshes ?? [old.mesh]) { this.group.remove(mesh); mesh.dispose(); }
+    for (const mesh of fresh.meshes ?? [fresh.mesh]) this.group.add(mesh);
+    this.sets[key] = fresh;
+    this.emit('modelchanged', key);
   }
 
   setShadows(on) {
@@ -342,13 +367,13 @@ export class BuildingSystem extends Emitter {
 
   // ------------------------------------------------------------ picking
   pick(raycaster) {
-    const meshes = [...Object.values(this.sets).map((s) => s.mesh), this.markers.mesh];
+    const meshes = [...Object.values(this.sets).flatMap((s) => s.meshes ?? [s.mesh]), this.markers.mesh];
     const hits = raycaster.intersectObjects(meshes, false);
     if (!hits.length) return null;
     const h = hits[0];
     if (h.object === this.markers.mesh) return { kind: 'source', id: this.markers.idAt(h.instanceId), distance: h.distance };
     const key = h.object.name.slice(2);
-    return { kind: 'building', id: this.sets[key].idAt(h.instanceId), distance: h.distance };
+    return { kind: 'building', id: this.sets[key].idAt(h.instanceId, h.object), distance: h.distance };
   }
 
   // ------------------------------------------------------------ info

@@ -1,0 +1,5 @@
+{
+  "version": 2,
+  "decoders": { "path": "../vendor/decoders/" },
+  "assets": {}
+}

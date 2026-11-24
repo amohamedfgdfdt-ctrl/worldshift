@@ -4,21 +4,32 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { HALF, CELL } from './config.js';
 import { Noise2D, mulberry32, smoothstep, clamp } from './utils.js';
-import { InstanceSet } from './instances.js';
-import { buildOak, buildPine, buildBush, buildRock } from './buildings.js';
+import { InstanceSet, LodInstanceSet } from './instances.js';
+import { buildOak, buildPine, buildBirch, buildOakLow, buildPineLow, buildBirchLow, buildReed, buildBush, buildRock } from './buildings.js';
 import { hex } from './geometry.js';
+import { injectAtmosphere } from './atmosphere.js';
 
 export const windUniforms = {
   uTime: { value: 0 },
   uWind: { value: 0.6 },
 };
 
-export function makeWindMaterial(extra = {}) {
+/** Per-material draw distance (metres from the camera); instances beyond it collapse on the GPU. */
+export function makeWindMaterial(extra = {}, cull = { value: 1e5 }) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, ...extra });
+  return windify(m, cull);
+}
+
+/** Add wind sway + GPU draw-distance cull + atmosphere to ANY standard material (keeps its maps). */
+export function windify(m, cull = { value: 1e5 }) {
+  if (m.userData.windified) return m;
+  m.userData.windified = true;
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = windUniforms.uTime;
     shader.uniforms.uWind = windUniforms.uWind;
-    shader.vertexShader = 'uniform float uTime;\nuniform float uWind;\n' + shader.vertexShader.replace(
+    shader.uniforms.uCull = cull;
+    injectAtmosphere(shader);
+    shader.vertexShader = 'uniform float uTime;\nuniform float uWind;\nuniform float uCull;\n' + shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
 #ifdef USE_INSTANCING
@@ -29,9 +40,11 @@ export function makeWindMaterial(extra = {}) {
   float hgt = max(position.y, 0.0);
   float sway = uWind * hgt * hgt * 0.011;
   transformed.x += (sin(uTime * 1.7 + ip.x * 0.31 + ip.z * 0.17) + 0.35 * sin(uTime * 3.3 + ip.z * 0.5)) * sway;
-  transformed.z += cos(uTime * 1.3 + ip.z * 0.27 + ip.x * 0.11) * sway * 0.7;`);
+  transformed.z += cos(uTime * 1.3 + ip.z * 0.27 + ip.x * 0.11) * sway * 0.7;
+  if (distance(ip, cameraPosition) > uCull) transformed = vec3(0.0);`);
   };
-  m.customProgramCacheKey = () => 'terra-wind-v1';
+  m.customProgramCacheKey = () => 'terra-wind-v2';
+  m.needsUpdate = true;
   return m;
 }
 
@@ -83,13 +96,20 @@ export class Vegetation {
     this.group.name = 'vegetation';
     scene.add(this.group);
 
-    this.windMat = makeWindMaterial();
+    this.cullTree = { value: 1e5 };
+    this.cullGrass = { value: 1e5 };
+    this.windMat = makeWindMaterial({}, this.cullTree);
     this.solidMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
-    this.grassMat = makeWindMaterial({ side: THREE.DoubleSide, roughness: 1 });
+    this.grassMat = makeWindMaterial({ side: THREE.DoubleSide, roughness: 1 }, this.cullGrass);
 
     this.sets = {
       oak: new InstanceSet(buildOak(), this.windMat, 900, { name: 'env-oak' }),
       pine: new InstanceSet(buildPine(), this.windMat, 900, { name: 'env-pine' }),
+      birch: new InstanceSet(buildBirch(), this.windMat, 600, { name: 'env-birch' }),
+      oakL: new InstanceSet(buildOakLow(), this.windMat, 900, { castShadow: false, name: 'env-oak-lod' }),
+      pineL: new InstanceSet(buildPineLow(), this.windMat, 900, { castShadow: false, name: 'env-pine-lod' }),
+      birchL: new InstanceSet(buildBirchLow(), this.windMat, 600, { castShadow: false, name: 'env-birch-lod' }),
+      reed: new InstanceSet(buildReed(), this.grassMat, 500, { castShadow: false, name: 'env-reed' }),
       bush: new InstanceSet(buildBush(), this.windMat, 500, { name: 'env-bush' }),
       rock: new InstanceSet(buildRock(), this.solidMat, 400, { name: 'env-rock' }),
       grass: new InstanceSet(grassGeometry(false), this.grassMat, 6000, { castShadow: false, name: 'env-grass' }),
@@ -98,14 +118,83 @@ export class Vegetation {
     for (const s of Object.values(this.sets)) this.group.add(s.mesh);
     this.items = [];     // {set,id,x,z}
     this._id = 1;
+    this._lodCursor = 0;
+    this.lodDist = 110;
+    this.lodSwaps = 0;
   }
 
   setShadows(on) {
-    for (const k of ['oak', 'pine', 'bush', 'rock']) this.sets[k].mesh.castShadow = on;
+    for (const k of ['oak', 'pine', 'birch', 'bush', 'rock']) this.sets[k].mesh.castShadow = on;
   }
 
   setDensity(f) {
-    for (const [k, s] of Object.entries(this.sets)) s.setFraction(k === 'grass' || k === 'flower' ? f * 0.85 : f);
+    for (const [k, s] of Object.entries(this.sets)) s.setFraction(k === 'grass' || k === 'flower' || k === 'reed' ? f * 0.85 : f);
+  }
+
+  /**
+   * Distance LOD for trees: swap between the full model and a few-triangle
+   * model. A quarter of the trees is examined per call (round-robin), with
+   * hysteresis so trees never flicker at the boundary.
+   */
+  updateLod(camPos) {
+    for (const st of Object.values(this.sets)) if (st.updateLod) st.updateLod(camPos);
+    const items = this.items;
+    const n = items.length; if (!n) return;
+    const per = Math.ceil(n / 4);
+    const near = this.lodDist * 0.9, far = this.lodDist * 1.1;
+    for (let k = 0; k < per; k++) {
+      const it = items[this._lodCursor++ % n];
+      if (!it.m) continue;
+      const dx = it.x - camPos.x, dz = it.z - camPos.z;
+      const d = Math.hypot(dx, dz, camPos.y * 0.6);
+      const low = it.set !== it.key;
+      let want = low;
+      if (!low && d > far) want = true; else if (low && d < near) want = false;
+      if (want === low) continue;
+      const from = it.set, to = want ? it.key + 'L' : it.key;
+      const src = this.sets[from], dst = this.sets[to];
+      if (dst.add(it.id, it.m, it.tint) < 0) continue;
+      src.remove(it.id);
+      it.set = to;
+      this.lodSwaps++;
+    }
+  }
+
+  /** Species that can be replaced by external models, and which cull distance they use. */
+  static get SPECIES() {
+    return { oak: 'tree', pine: 'tree', birch: 'tree', bush: 'tree', rock: null, reed: 'grass', grass: 'grass', flower: 'grass' };
+  }
+
+  cullFor(key) { const k = Vegetation.SPECIES[key]; return k === 'tree' ? this.cullTree : k === 'grass' ? this.cullGrass : null; }
+
+  /**
+   * Replace one species with external detail levels [{geometry, material, distance}].
+   * Every existing instance keeps its transform and tint.
+   */
+  replaceSpecies(key, levels) {
+    const old = this.sets[key];
+    if (!old) throw new Error('unknown vegetation species: ' + key);
+    const fresh = new LodInstanceSet(levels, old.capacity, { castShadow: old.mesh.castShadow, name: 'env-' + key });
+    fresh.setFraction(old.fraction ?? 1);
+    const m = new THREE.Matrix4(), c = new THREE.Color();
+    for (const it of this.items) {
+      if (it.key !== key) continue;
+      const src = this.sets[it.set];
+      if (!src.getMatrix(it.id, m)) continue;
+      src.getColor(it.id, c);
+      fresh.add(it.id, m, c);
+      it.set = key; it.m = null; it.tint = null;
+    }
+    const gone = [key, key + 'L'];
+    for (const g of gone) {
+      const st = this.sets[g]; if (!st) continue;
+      for (const mesh of st.meshes ?? [st.mesh]) this.group.remove(mesh);
+      st.dispose?.(); st.mesh.dispose();
+      if (g !== key) delete this.sets[g];
+    }
+    this.sets[key] = fresh;
+    for (const mesh of fresh.meshes) this.group.add(mesh);
+    return fresh;
   }
 
   clear() {
@@ -135,7 +224,8 @@ export class Vegetation {
       dummy.updateMatrix();
       const id = this._id++;
       this.sets[key].add(id, dummy.matrix, tint);
-      this.items.push({ key, id, x, z });
+      const lodable = (key === 'oak' || key === 'pine' || key === 'birch') && !(this.sets[key] instanceof LodInstanceSet);
+      this.items.push({ key, set: key, id, x, z, m: lodable ? dummy.matrix.clone() : null, tint: lodable ? tint : null });
     };
 
     // trees
@@ -148,12 +238,23 @@ export class Vegetation {
       let dens = smoothstep(-0.12, 0.3, forest) * smoothstep(46, 34, h) * smoothstep(0.95, 0.45, sl);
       if (rng() > dens * 0.75 + 0.012) continue;
       const pinePref = smoothstep(9, 26, h) * 0.85 + 0.08;
-      const key = rng() < pinePref ? 'pine' : 'oak';
+      const key = rng() < pinePref ? 'pine' : (rng() < 0.3 && h < 24 ? 'birch' : 'oak');
       const s = 0.8 + rng() * 0.55;
       const t = 0.88 + rng() * 0.24;
       col.setRGB(t * (0.94 + rng() * 0.12), t, t * (0.9 + rng() * 0.15));
       put(key, x, h, z, s, col.clone());
       trees++;
+    }
+
+    // reeds along the shoreline
+    let reeds = 0;
+    for (let a = 0; a < 20000 && reeds < 360; a++) {
+      const x = (rng() * 2 - 1) * (HALF - 5), z = (rng() * 2 - 1) * (HALF - 5);
+      if (waterDepthAtNode(x, z) > 0 || !wet(x, z, 3)) continue;
+      const t = 0.85 + rng() * 0.3;
+      col.setRGB(t, t, t * 0.9);
+      put('reed', x, f.heightAt(x, z), z, 0.8 + rng() * 0.7, col.clone());
+      reeds++;
     }
 
     // bushes
@@ -206,14 +307,14 @@ export class Vegetation {
         flowers++;
       }
     }
-    return { trees, bushes, rocks, grass, flowers };
+    return { trees, bushes, rocks, grass, flowers, reeds };
   }
 
   /** Remove environment items inside a world-space rectangle. */
   clearArea(x0, z0, x1, z1) {
     const keep = [];
     for (const it of this.items) {
-      if (it.x >= x0 && it.x <= x1 && it.z >= z0 && it.z <= z1) this.sets[it.key].remove(it.id);
+      if (it.x >= x0 && it.x <= x1 && it.z >= z0 && it.z <= z1) this.sets[it.set].remove(it.id);
       else keep.push(it);
     }
     this.items = keep;

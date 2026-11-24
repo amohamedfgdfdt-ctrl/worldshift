@@ -50,7 +50,41 @@ const D = {
   'Drag: rotate · Right-drag / Shift+drag: move · Wheel: zoom · WASD/arrows: move · Q/E: turn · R: rotate building · Esc: cancel · Space: play/pause. On touch: one finger rotates or moves (button on the right), two fingers pinch, move and twist.':
     'سحب: تدوير · سحب بالزر الأيمن / Shift+سحب: تحريك · العجلة: تقريب · WASD/الأسهم: حركة · Q/E: دوران · R: تدوير المبنى · Esc: إلغاء · Space: تشغيل/إيقاف. باللمس: إصبع واحد للتدوير أو التحريك (الزر الجانبي)، وإصبعان للتقريب والتحريك والدوران.',
 };
+Object.assign(D, {
+  'Graphics settings': 'إعدادات الرسوميات', 'Graphics settings…': 'إعدادات الرسوميات…', 'Custom': 'مخصص', 'Medium': 'متوسطة', 'Ultra': 'قصوى',
+  'Auto Graphics Mode': 'وضع الرسوميات التلقائي', 'Lowers quality when the frame rate drops and restores it when stable.': 'يخفض الجودة عند انخفاض الفريمات ويعيدها عند الاستقرار.',
+  'Dynamic resolution': 'الدقة الديناميكية', 'Scales the render resolution to hold the target frame rate.': 'يضبط دقة الرسم للحفاظ على معدل الفريمات المستهدف.',
+  'This device': 'هذا الجهاز', "Capabilities come from the browser's WebGL API. The renderer string is shown only to detect software rendering; the device model is never used.": 'القدرات تأتي من واجهة WebGL في المتصفح. يُعرض اسم المعالج الرسومي فقط لاكتشاف الرسم البرمجي، ولا يُستخدم طراز الجهاز أبدًا.',
+  'Restore Defaults': 'استعادة الافتراضي', 'Auto Detect': 'كشف تلقائي', 'Apply Settings': 'تطبيق الإعدادات', 'Testing…': 'جارٍ الفحص…', 'Review': 'مراجعة', 'Something went wrong:': 'حدث خطأ:',
+  'Performance': 'الأداء', 'Shadows & light': 'الظلال والإضاءة', 'Image': 'الصورة',
+  'Frame rate limit': 'سقف الفريمات', 'A target, not a guarantee. Your display refresh rate is the real ceiling.': 'هدف وليس ضمانًا. معدل تحديث شاشتك هو السقف الحقيقي.',
+  'Render resolution scale': 'مقياس دقة الرسم', 'Internal resolution relative to the screen. Above 100% supersamples.': 'الدقة الداخلية بالنسبة للشاشة. فوق 100% تزيد النعومة.',
+  'Draw distance': 'مسافة الرؤية', 'Camera far plane, fog distance and vegetation culling range.': 'أبعد مسافة للكاميرا والضباب ونطاق إخفاء النباتات.',
+  'Shadow resolution': 'دقة الظلال', 'Off': 'إيقاف', 'Shadow quality': 'جودة الظلال', 'Hard': 'حادة', 'Soft (PCF)': 'ناعمة (PCF)', 'Softest': 'الأنعم',
+  'Ambient occlusion': 'الحجب المحيطي', 'Screen-space GTAO. Needs float render targets and post-processing.': 'GTAO في فضاء الشاشة. يحتاج float render targets ومعالجة لاحقة.',
+  'Volumetric effects': 'المؤثرات الحجمية', 'Height fog + sun scatter': 'ضباب بالارتفاع + تبعثر الشمس', '+ Light shafts': '+ أشعة الضوء', 'Light shafts are a screen-space radial blur, not true volumetrics.': 'أشعة الضوء طمس شعاعي في فضاء الشاشة وليست حجمية حقيقية.',
+  'Anti-aliasing': 'تنعيم الحواف', 'Post-processing': 'معالجة لاحقة', 'Bloom + cinematic grade': 'توهج + تدرج سينمائي',
+  'Texture quality': 'جودة الخامات', 'Anisotropic filtering and procedural texture resolution.': 'ترشيح متباين الخواص ودقة الخامات الإجرائية.',
+  'Terrain detail': 'تفاصيل التضاريس', 'Basic': 'أساسية', 'Detailed': 'مفصّلة', 'Rich (layers + micro relief)': 'غنية (طبقات + نتوءات دقيقة)',
+  'Vegetation density': 'كثافة النباتات', 'Foliage quality': 'جودة الأوراق', 'Static': 'ثابتة', 'Wind sway': 'تمايل مع الرياح', 'Wind + tree shadows': 'رياح + ظلال الأشجار', 'Particle density': 'كثافة الجسيمات',
+  'Water quality': 'جودة المياه', 'Low · flat': 'منخفضة · مسطحة', 'Medium · ripples': 'متوسطة · تموجات', 'High · waves + foam': 'عالية · أمواج + رغوة', 'Ultra · + caustics': 'قصوى · + انكسارات ضوئية',
+  'Only changes how water looks. The flow simulation is identical at every level.': 'يغيّر شكل الماء فقط. محاكاة الجريان متطابقة في كل المستويات.',
+  'Reflection quality': 'جودة الانعكاس', 'Sky only': 'السماء فقط', 'Sky + sun glint': 'السماء + لمعان الشمس', 'Planar · half res': 'مستوٍ · نصف الدقة', 'Planar · high res': 'مستوٍ · دقة عالية', 'Planar reflections re-render the scene for the lake surface.': 'الانعكاس المستوي يعيد رسم المشهد لسطح البحيرة.',
+  'Software rendering detected (no GPU acceleration).': 'تم اكتشاف رسم برمجي (بدون تسريع GPU).', 'Float render targets unavailable.': 'Float render targets غير متاحة.', 'High pixel density screen: render scale kept in check.': 'شاشة عالية الكثافة: تم ضبط مقياس الدقة.',
+  'Max texture': 'أقصى خامة', 'Anisotropy': 'الترشيح المتباين', 'MSAA samples': 'عينات MSAA', 'Float targets': 'Float targets', 'GPU timer': 'مؤقت GPU', 'Screen': 'الشاشة', 'Refresh rate': 'معدل التحديث', 'Renderer': 'المعالج',
+  'Frame': 'الفريم', 'Worst': 'الأسوأ', 'Render (CPU)': 'الرسم (CPU)', 'Resolution': 'الدقة', 'Target': 'الهدف',
+  'yes': 'نعم', 'no': 'لا', 'none': 'لا يوجد', 'n/a': 'غير متاح', 'hardware': 'عتاد (GPU)', 'software (no GPU)': 'برمجي (بدون GPU)',
+});
+const VERB = { lowered: 'انخفضت', restored: 'عادت', raised: 'ارتفعت', stepped: 'تغيّرت' };
+const preset = (p) => tr(p[0].toUpperCase() + p.slice(1)) || p;
 const P = [
+  [/^(\d+) FPS$/, (m) => `${m[1]} إطار/ث`], [/^(\d+) px$/, (m) => `${m[1]} بكسل`], [/^≈(\d+) Hz \(measured\)$/, (m) => `≈${m[1]} هرتز (مُقاس)`],
+  [/^Resolution (\d+)%$/, (m) => `الدقة ${m[1]}%`], [/^Auto: quality (\w+) → (\w+)$/, (m) => `تلقائي: ${VERB[m[1]] || m[1]} الجودة → ${preset(m[2])}`],
+  [/^Needs (.+) \(not available here\)\.$/, (m) => `يحتاج ${m[1]} (غير متاح هنا).`],
+  [/^Preset: (\w+)( · Auto mode on)? — changes preview live; Apply keeps them\.$/, (m) => `الإعداد: ${preset(m[1])}${m[2] ? ' · الوضع التلقائي مفعّل' : ''} — التغييرات تُعاين مباشرة وزر التطبيق يحفظها.`],
+  [/^(Suggested for this device|Detected): (\w+)$/, (m) => `${m[1] === 'Detected' ? 'تم اكتشاف' : 'المقترح لهذا الجهاز'}: ${preset(m[2])}`],
+  [/^Graphics set to (\w+) for this device\.$/, (m) => `تم ضبط الرسوميات على ${preset(m[1])} لهذا الجهاز.`],
+  [/^Benchmark: about ([\d.]+) ms per frame at Medium \(upper bound when the display refresh caps the test\)\.$/, (m) => `الاختبار: حوالي ${m[1]} مللي ثانية للفريم على المتوسط (حد أعلى عندما يحدّ معدل تحديث الشاشة من الاختبار).`],
   [/^Running ×(\d+)$/, (m) => `يعمل ×${m[1]}`], [/^Day (\d+)$/, (m) => `اليوم ${m[1]}`], [/^(\d+) fps$/, (m) => `${m[1]} إطار/ث`],
   [/^(\d+) \(stopped\)$/, (m) => `${m[1]} (متوقفة)`], [/^(\d+)×(\d+) cells · (.+)$/, (m) => `${m[1]}×${m[2]} خلية · ${m[3]}`],
   [/^(\d+×\d+) · (\d+) residents$/, (m) => `${m[1]} · ${m[2]} ساكن`], [/^(\d+×\d+) · (\d+) jobs$/, (m) => `${m[1]} · ${m[2]} وظيفة`],
@@ -64,6 +98,8 @@ export function tr(s) {
   if (!k || AR.test(k)) return null;
   if (D[k]) return D[k];
   for (const [r, f] of P) { const m = r.exec(k); if (m) return f(m); }
+  const parts = k.split(/(?<=[.!])\s+/);
+  if (parts.length > 1) { const out = parts.map(tr); if (out.every(Boolean)) return out.join(' '); }
   return null;
 }
 function txt(n) {

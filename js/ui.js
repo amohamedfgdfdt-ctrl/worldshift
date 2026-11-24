@@ -31,6 +31,7 @@ export class UI {
   _build() {
     for (const n of document.querySelectorAll('[data-icon]')) n.innerHTML = icon(n.dataset.icon, 16);
     $('#btn-settings').innerHTML = icon('gear', 20);
+    $('#btn-gfx').innerHTML = icon('sparkle', 20);
 
     this.el.rail.innerHTML = CATEGORIES.map((c) =>
       `<button class="rail-btn" data-cat="${c.id}" title="${c.label}">${icon(c.icon, 22)}<span>${c.label.replace(' Tools', '').replace('World Settings', 'World')}</span></button>`).join('');
@@ -65,6 +66,7 @@ export class UI {
       this.toggleCategory(b.dataset.cat);
     });
     $('#btn-settings').addEventListener('click', () => this.toggleCategory('world'));
+    $('#btn-gfx').addEventListener('click', () => this.openGraphics?.());
 
     // camera
     this.el.cam.addEventListener('click', (e) => {
@@ -225,13 +227,10 @@ export class UI {
           ${this._switch('grid', 'Always show build grid', s.grid)}
         </div>
         <div class="section"><h4>Graphics</h4>
-          <div class="seg" id="seg-quality">${['auto', 'high', 'balanced', 'low'].map((q) => `<button data-q="${q}" class="${s.quality === q ? 'on' : ''}">${q[0].toUpperCase() + q.slice(1)}</button>`).join('')}</div>
-          <p class="help" id="q-help">Auto lowers the resolution if the frame rate drops.</p>
-          <div class="kv" style="margin-top:8px"><span>Frame limit</span></div>
-          <div class="seg" id="seg-fps">${[[60, '60'], [30, '30'], [0, 'No limit']].map(([v, l]) => `<button data-fps="${v}" class="${s.fps === v ? 'on' : ''}">${l}</button>`).join('')}</div>
-          <p class="help">A lower limit saves battery and heat.</p>
+          <div class="kv"><span>Preset</span><b id="ws-preset">–</b></div>
           <div class="kv"><span>Frame rate</span><b id="ws-fps">–</b></div>
           <div class="kv"><span>Resolution scale</span><b id="ws-res">–</b></div>
+          <div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="gfx">Graphics settings…</button></div>
         </div>
         <div class="section"><h4>World</h4>
           <div class="kv"><span>Seed</span><b>${this.world.seed}</b></div>
@@ -285,20 +284,13 @@ export class UI {
       }
       return;
     }
-    const q = e.target.closest('[data-q]');
-    if (q) {
-      this.settings.apply({ quality: q.dataset.q });
-      for (const b of $('#seg-quality').children) b.classList.toggle('on', b === q);
-      return;
-    }
-    const fp = e.target.closest('[data-fps]');
-    if (fp) { this.settings.apply({ fps: Number(fp.dataset.fps) }); for (const b of $('#seg-fps').children) b.classList.toggle('on', b === fp); return; }
     const lg = e.target.closest('[data-lang]');
     if (lg) { setLang(lg.dataset.lang); return; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     switch (a.dataset.act) {
       case 'close-panel': this.closePanel(); break;
+      case 'gfx': this.openGraphics?.(); break;
       case 'save': this.save.save(false); break;
       case 'load':
         this.confirm({ title: 'Load saved world?', text: 'Your current world will be replaced by the last saved one.', ok: 'Load' }).then((ok) => { if (ok) this.save.load(); });
@@ -429,6 +421,19 @@ export class UI {
     a.classList.remove('closed');
   }
 
+  /** Persistent, non-blocking notice with an action button. */
+  banner(text, label, fn) {
+    this.el.toasts.querySelector('.banner')?.remove();
+    const d = document.createElement('div');
+    d.className = 'toast banner';
+    d.innerHTML = `<span></span><button class="btn small">${label}</button><button class="x" aria-label="Dismiss">✕</button>`;
+    d.firstChild.textContent = text;
+    d.querySelector('.btn').onclick = () => { d.remove(); fn(); };
+    d.querySelector('.x').onclick = () => d.remove();
+    this.el.toasts.appendChild(d);
+    setTimeout(() => d.remove(), 14000);
+  }
+
   toast(text, kind = '') {
     const d = document.createElement('div');
     d.className = `toast ${kind}`; d.textContent = text;
@@ -512,7 +517,8 @@ export class UI {
       }
       if (this.cat === 'world') {
         const f = $('#ws-fps'); if (f) f.textContent = `${Math.round(this.perf.fps)} fps`;
-        const r = $('#ws-res'); if (r) r.textContent = `${this.world.renderer.getPixelRatio().toFixed(2)}×`;
+        const r = $('#ws-res'); if (r) r.textContent = `${Math.round(this.world.pixelRatio() / Math.min(devicePixelRatio || 1, 2) * 100)}%`;
+        const pr = $('#ws-preset'); if (pr) pr.textContent = this.world.gfxPresetLabel || '–';
       }
     }
   }

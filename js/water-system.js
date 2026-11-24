@@ -285,19 +285,45 @@ export class WaterSim {
 // Water surface mesh + shader
 // ---------------------------------------------------------------------------
 
+const WAVES_GLSL = /* glsl */`
+// Sum of three travelling sine waves (visual only). Returns height, writes the gradient.
+float waveSum(vec2 p, float t, out vec2 g) {
+  const vec2 D0 = vec2(0.8, 0.6), D1 = vec2(-0.5, 0.85), D2 = vec2(0.2, -0.98);
+  float h = 0.0; g = vec2(0.0); float f;
+  f = dot(D0, p) * 0.42 + t * 1.3; h += 0.070 * sin(f); g += 0.070 * 0.42 * cos(f) * D0;
+  f = dot(D1, p) * 0.77 + t * 1.7; h += 0.040 * sin(f); g += 0.040 * 0.77 * cos(f) * D1;
+  f = dot(D2, p) * 1.30 + t * 2.2; h += 0.020 * sin(f); g += 0.020 * 1.30 * cos(f) * D2;
+  return h;
+}`;
+
 const WATER_VERT = /* glsl */`
 attribute float aDepth;
 attribute vec2 aFlow;
+attribute float aFoam;
+uniform float uTime;
+uniform float uQ;
+uniform mat4 uReflMat;
 varying float vDepth;
 varying vec2 vFlow;
 varying vec3 vWPos;
 varying vec3 vNormalW;
+varying float vFoam;
+varying vec4 vRefl;
+${WAVES_GLSL}
 void main() {
   vDepth = aDepth;
   vFlow = aFlow;
+  vFoam = aFoam;
   vNormalW = normal;
-  vWPos = position;
-  gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
+  vec3 p = position;
+  if (uQ > 1.5) {
+    vec2 g;
+    float calm = smoothstep(0.08, 0.9, aDepth) * (1.0 - 0.6 * smoothstep(1.5, 4.0, length(aFlow)));
+    p.y += waveSum(p.xz, uTime, g) * calm;
+  }
+  vWPos = p;
+  vRefl = uReflMat * vec4(p, 1.0);
+  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
 }`;
 
 const WATER_FRAG = /* glsl */`
@@ -312,12 +338,20 @@ uniform vec3 uDeep;
 uniform vec3 uFogColor;
 uniform float uFogDensity;
 uniform float uLight;
+uniform float uQ;
+uniform float uRefl;
+uniform float uHasRefl;
+uniform float uLakeY;
+uniform sampler2D uReflTex;
 uniform sampler2D uNormalTex;
 uniform sampler2D uFoamTex;
 varying float vDepth;
 varying vec2 vFlow;
 varying vec3 vWPos;
 varying vec3 vNormalW;
+varying float vFoam;
+varying vec4 vRefl;
+${WAVES_GLSL}
 
 vec3 skyCol(vec3 r) {
   float t = pow(clamp(r.y, 0.0, 1.0), 0.45);
@@ -325,7 +359,6 @@ vec3 skyCol(vec3 r) {
 }
 
 vec2 rippleNormal(vec2 p, vec2 flow, float t) {
-  // two-phase flow-map blend so the ripples travel along the flow
   float sp = length(flow);
   vec2 f = flow * 0.55 + vec2(0.35, 0.12) * (1.0 - smoothstep(0.0, 0.8, sp));
   float ph0 = fract(t * 0.35), ph1 = fract(t * 0.35 + 0.5);
@@ -342,32 +375,61 @@ void main() {
   if (dep < 0.006) discard;
   vec3 V = normalize(cameraPosition - vWPos);
   vec3 Nb = normalize(vNormalW);
-  vec2 rn = rippleNormal(vWPos.xz, vFlow, uTime);
   float calm = smoothstep(0.0, 0.6, dep);
-  vec3 N = normalize(vec3(Nb.x + rn.x * 0.32 * calm, Nb.y, Nb.z + rn.y * 0.32 * calm));
+  vec3 N = Nb;
+  vec2 rn = vec2(0.0);
+  if (uQ > 0.5) {
+    rn = rippleNormal(vWPos.xz, vFlow, uTime);
+    N = normalize(vec3(Nb.x + rn.x * 0.32 * calm, Nb.y, Nb.z + rn.y * 0.32 * calm));
+  }
+  if (uQ > 1.5) {
+    vec2 g; waveSum(vWPos.xz, uTime, g);
+    float wc = smoothstep(0.08, 0.9, dep) * (1.0 - 0.6 * smoothstep(1.5, 4.0, length(vFlow)));
+    N = normalize(vec3(N.x - g.x * wc, N.y, N.z - g.y * wc));
+  }
 
   float ndv = clamp(dot(N, V), 0.0, 1.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
   vec3 R = reflect(-V, N);
   R.y = abs(R.y);
   vec3 sky = skyCol(R);
-  float sunAmt = max(dot(R, uSunDir), 0.0);
-  vec3 spec = uSunColor * (pow(sunAmt, 900.0) * 6.0 + pow(sunAmt, 60.0) * 0.35) * smoothstep(-0.02, 0.15, uSunDir.y);
+
+  // planar reflection of the scene (lake level only)
+  if (uRefl > 1.5 && uHasRefl > 0.5) {
+    float onLake = 1.0 - smoothstep(0.12, 0.5, abs(vWPos.y - uLakeY));
+    vec2 ruv = vRefl.xy / vRefl.w + (N.xz - Nb.xz) * 0.06;
+    vec3 rc = texture2D(uReflTex, clamp(ruv, 0.002, 0.998)).rgb;
+    sky = mix(sky, rc, onLake * (uRefl > 2.5 ? 1.0 : 0.85));
+  }
+
+  vec3 spec = vec3(0.0);
+  if (uRefl > 0.5) {
+    float sunAmt = max(dot(R, uSunDir), 0.0);
+    spec = uSunColor * (pow(sunAmt, 900.0) * 6.0 + pow(sunAmt, 60.0) * 0.35) * smoothstep(-0.02, 0.15, uSunDir.y);
+  }
 
   float k = exp(-dep * 0.5);
   vec3 body = mix(uDeep, uShallow, k) * uLight;
   float diff = 0.55 + 0.45 * max(dot(N, uSunDir), 0.0);
   body *= diff;
+  // depth colouring: shallow water picks up a sandy tint, deep water gets darker
+  if (uQ > 1.5) body = mix(body, body * vec3(1.15, 1.1, 0.9), (1.0 - smoothstep(0.0, 0.6, dep)) * 0.5);
 
   vec3 col = mix(body, sky, clamp(fres * 0.9 + 0.04, 0.0, 1.0));
   col += spec;
 
-  // foam: shoreline + fast water
+  // foam
   float speed = length(vFlow);
-  float fn = texture2D(uFoamTex, vWPos.xz * 0.09 + vFlow * uTime * -0.05).r;
-  float fn2 = texture2D(uFoamTex, vWPos.xz * 0.23 - vec2(uTime * 0.02)).r;
-  float shore = smoothstep(0.16, 0.012, dep) * (0.25 + 0.55 * fn);
-  float rapid = smoothstep(2.0, 5.0, speed) * fn * fn2 * 1.6;
+  float shore, rapid = 0.0, fn = 0.5;
+  if (uQ > 0.5) {
+    fn = texture2D(uFoamTex, vWPos.xz * 0.09 + vFlow * uTime * -0.05).r;
+    float fn2 = texture2D(uFoamTex, vWPos.xz * 0.23 - vec2(uTime * 0.02)).r;
+    shore = smoothstep(0.16, 0.012, dep) * (0.25 + 0.55 * fn);
+    rapid = smoothstep(2.0, 5.0, speed) * fn * fn2 * 1.6;
+    if (uQ > 1.5) rapid += vFoam * (0.35 + 0.9 * fn * fn2) * smoothstep(0.02, 0.3, dep);
+  } else {
+    shore = smoothstep(0.1, 0.01, dep) * 0.5;
+  }
   float foam = clamp(shore * 0.9 + rapid, 0.0, 1.0);
   col = mix(col, vec3(0.9, 0.95, 1.0) * uLight, foam * 0.7);
 
@@ -394,6 +456,10 @@ export class WaterMesh {
     this.nor = new Float32Array(n * 3);
     this.dep = new Float32Array(n);
     this.flow = new Float32Array(n * 2);
+    this.foam = new Float32Array(n);
+    this._skip = 0;
+    this.quality = 2; this.reflQ = 0;
+    this.reflRT = null;
     for (let j = 0; j < VERTS; j++) for (let i = 0; i < VERTS; i++) {
       const k = j * VERTS + i;
       this.pos[k * 3] = i * CELL - HALF;
@@ -409,6 +475,7 @@ export class WaterMesh {
     g.setAttribute('normal', mk(this.nor, 3));
     g.setAttribute('aDepth', mk(this.dep, 1));
     g.setAttribute('aFlow', mk(this.flow, 2));
+    g.setAttribute('aFoam', mk(this.foam, 1));
     g.setIndex(terrainIndex);
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 20, 0), SIZE);
     g.boundingBox = new THREE.Box3(new THREE.Vector3(-HALF, -10, -HALF), new THREE.Vector3(HALF, 80, HALF));
@@ -427,7 +494,14 @@ export class WaterMesh {
       uLight: { value: 1 },
       uNormalTex: { value: textures.waterNormal },
       uFoamTex: { value: textures.foam },
+      uQ: { value: 2 },
+      uRefl: { value: 0 },
+      uHasRefl: { value: 0 },
+      uLakeY: { value: sim.field?.lake?.level ?? 0 },
+      uReflTex: { value: null },
+      uReflMat: { value: new THREE.Matrix4() },
     };
+    this.vcam = new THREE.PerspectiveCamera();
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       vertexShader: WATER_VERT,
@@ -441,10 +515,78 @@ export class WaterMesh {
     this.mesh.name = 'water';
   }
 
+  /** Visual quality 0..3 and reflection quality 0..3. Never touches the simulation. */
+  setQuality(q, refl) {
+    this.quality = q; this.reflQ = refl;
+    this.uniforms.uQ.value = q;
+    this.uniforms.uRefl.value = refl;
+    if (refl < 2) this.disposeReflection();
+    if (q < 2) this.foam.fill(0);
+  }
+
+  disposeReflection() {
+    if (this.reflRT) { this.reflRT.dispose(); this.reflRT = null; }
+    this.uniforms.uHasRefl.value = 0;
+    this.uniforms.uReflTex.value = null;
+  }
+
+  /** Render the scene mirrored about the lake plane (planar reflection). */
+  renderReflection(renderer, scene, camera, pr) {
+    if (this.reflQ < 2) return;
+    const res = this.reflQ >= 3 ? 0.75 : 0.45;
+    const canvas = renderer.domElement;
+    const W = Math.max(64, Math.round(canvas.clientWidth * pr * res)), H = Math.max(64, Math.round(canvas.clientHeight * pr * res));
+    if (!this.reflRT || this.reflRT.width !== W || this.reflRT.height !== H) {
+      this.disposeReflection();
+      this.reflRT = new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, depthBuffer: true });
+      this.reflRT.texture.generateMipmaps = false;
+    }
+    const y = this.uniforms.uLakeY.value;
+    if (camera.position.y <= y + 0.5) { this.uniforms.uHasRefl.value = 0; return; }
+    const vc = this.vcam;
+    camera.updateMatrixWorld();
+    const pos = camera.position.clone();
+    const fwd = new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld);
+    const tgt = pos.clone().addScaledVector(fwd, 10);
+    const mirror = (v) => v.set(v.x, 2 * y - v.y, v.z);
+    vc.position.copy(mirror(pos.clone()));
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    vc.up.set(up.x, -up.y, up.z);
+    vc.lookAt(mirror(tgt));
+    vc.fov = camera.fov; vc.aspect = camera.aspect; vc.near = camera.near; vc.far = Math.min(camera.far, 1500);
+    vc.updateProjectionMatrix();
+    vc.updateMatrixWorld();
+    vc.matrixWorldInverse.copy(vc.matrixWorld).invert();
+    const m = this.uniforms.uReflMat.value;
+    m.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+    m.multiply(vc.projectionMatrix).multiply(vc.matrixWorldInverse);
+
+    const wasVis = this.mesh.visible;
+    this.mesh.visible = false;
+    const sh = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -y + 0.02);
+    const oldClip = renderer.clippingPlanes;
+    renderer.clippingPlanes = [plane];
+    const oldRT = renderer.getRenderTarget();
+    renderer.setRenderTarget(this.reflRT);
+    renderer.clear();
+    renderer.render(scene, vc);
+    renderer.setRenderTarget(oldRT);
+    renderer.clippingPlanes = oldClip;
+    renderer.shadowMap.autoUpdate = sh;
+    this.mesh.visible = wasVis;
+    this.uniforms.uReflTex.value = this.reflRT.texture;
+    this.uniforms.uHasRefl.value = 1;
+  }
+
   /** Copy simulation state into the vertex buffers (only when dirty). */
   update(force = false) {
     const sim = this.sim;
     if (!sim.dirty && !force) return false;
+    // visual refresh rate is decoupled from the simulation (lower tiers refresh less often)
+    if (!force && ++this._skip < [3, 2, 1, 1][this.quality]) return false;
+    this._skip = 0;
     sim.dirty = false;
     const n = VERTS, d = sim.depth, h = sim.ground, pos = this.pos, nor = this.nor, dep = this.dep, flow = this.flow;
     const vx = sim.vx, vz = sim.vz;
@@ -454,6 +596,21 @@ export class WaterMesh {
       pos[k * 3 + 1] = h[k] + di + (di > 0 ? lift : -0.05);
       dep[k] = di;
       flow[k * 2] = vx[k]; flow[k * 2 + 1] = vz[k];
+    }
+    if (this.quality >= 2) {
+      // visual-only foam: turbulence (speed x depth gradient) that decays over time
+      const fo = this.foam;
+      for (let j = 1; j < n - 1; j++) for (let i = 1; i < n - 1; i++) {
+        const k = j * n + i, di = d[k];
+        let t = 0;
+        if (di > 0.01) {
+          const sp = Math.hypot(vx[k], vz[k]);
+          const gr = Math.abs(d[k + 1] - d[k - 1]) + Math.abs(d[k + n] - d[k - n]) + Math.abs(h[k + 1] - h[k - 1]) * 0.25 + Math.abs(h[k + n] - h[k - n]) * 0.25;
+          t = Math.min(1, sp * gr * 0.45) * (sp > 0.5 ? 1 : 0);
+        }
+        const v = fo[k] * 0.93;
+        fo[k] = t > v ? t : v;
+      }
     }
     // surface normals from central differences of the surface
     for (let j = 0; j < n; j++) {
@@ -470,7 +627,7 @@ export class WaterMesh {
     }
     const a = this.geometry.attributes;
     a.position.needsUpdate = true; a.normal.needsUpdate = true;
-    a.aDepth.needsUpdate = true; a.aFlow.needsUpdate = true;
+    a.aDepth.needsUpdate = true; a.aFlow.needsUpdate = true; a.aFoam.needsUpdate = this.quality >= 2;
     return true;
   }
 }

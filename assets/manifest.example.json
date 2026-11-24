@@ -1,0 +1,28 @@
+{
+  "_comment": "Schema example only. Copy entries into manifest.json once the .glb files really exist. Paths are relative to this file.",
+  "version": 2,
+  "decoders": { "path": "../vendor/decoders/" },
+  "assets": {
+    "oak": {
+      "category": "tree",
+      "target": "oak",
+      "dimensions": { "width": 7, "height": 9, "depth": 7 },
+      "fit": "height",
+      "scale": 1,
+      "yOffset": 0,
+      "lods": [
+        { "level": "high",   "url": "models/oak_high.glb" },
+        { "level": "medium", "url": "models/oak_med.glb",  "distance": 70 },
+        { "level": "low",    "url": "models/oak_low.glb",  "distance": 170 }
+      ]
+    },
+    "house_small": {
+      "category": "building",
+      "target": "house_small",
+      "dimensions": { "width": 9, "height": 7, "depth": 6 },
+      "url": "models/house_small.glb"
+    },
+    "rock": { "category": "rock", "target": "rock", "url": "models/rock_a.glb" },
+    "bush": { "category": "shrub", "target": "bush", "url": "models/shrub.glb" }
+  }
+}

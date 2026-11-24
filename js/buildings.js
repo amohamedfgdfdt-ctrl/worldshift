@@ -167,6 +167,45 @@ export function buildPine() {
   return b.build();
 }
 
+export function buildBirch() {
+  const b = new ModelBuilder();
+  b.cyl(0.14, 0.24, 3.6, 0, 0, 0, hex(0xd9d4c8), { seg: 6, jitter: 0.06 });
+  b.blob(1.25, 0.1, 4.3, 0, hex(0x7fae48), { lump: 0.2, jitter: 0.3 });
+  b.blob(0.95, 0.7, 3.5, 0.3, hex(0x93bd54), { lump: 0.2, jitter: 0.3 });
+  b.blob(0.9, -0.6, 3.3, -0.3, hex(0x6e9e3c), { lump: 0.2, jitter: 0.3 });
+  b.blob(0.8, 0, 5.2, 0.1, hex(0x9bc45a), { lump: 0.2, jitter: 0.3 });
+  return b.build();
+}
+
+// far-distance LODs: a handful of triangles each
+export function buildOakLow() {
+  const b = new ModelBuilder();
+  b.cyl(0.3, 0.4, 2.4, 0, 0, 0, hex(0x5b4030), { seg: 4 });
+  b.blob(2.1, 0, 3.8, 0, hex(0x44802c), { lump: 0.1, jitter: 0.2, detail: 0 });
+  return b.build();
+}
+export function buildPineLow() {
+  const b = new ModelBuilder();
+  b.cyl(0.25, 0.32, 1.4, 0, 0, 0, hex(0x4e3828), { seg: 4 });
+  b.cone(2.0, 6.2, 0, 1.2, 0, hex(0x2f6431), { seg: 5, jitter: 0.1 });
+  return b.build();
+}
+export function buildBirchLow() {
+  const b = new ModelBuilder();
+  b.cyl(0.18, 0.22, 3.2, 0, 0, 0, hex(0xd9d4c8), { seg: 4 });
+  b.blob(1.4, 0.1, 4.2, 0, hex(0x86b34c), { lump: 0.1, jitter: 0.2, detail: 0 });
+  return b.build();
+}
+export function buildReed() {
+  const b = new ModelBuilder();
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.26, r = 0.18;
+    b.cone(0.07, 1.5 + (i % 3) * 0.3, Math.cos(a) * r, 0, Math.sin(a) * r, hex(i % 2 ? 0x7a8d3b : 0x8a9a45), { seg: 3 });
+  }
+  b.cyl(0.05, 0.05, 0.5, 0.05, 1.2, 0.02, hex(0x6b4a2e), { seg: 4 });
+  return b.build();
+}
+
 export function buildBush() {
   const b = new ModelBuilder();
   b.blob(0.85, 0, 0.45, 0, hex(0x3f7a2a), { lump: 0.22, jitter: 0.3, sy: 0.8 });
