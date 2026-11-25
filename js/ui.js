@@ -230,7 +230,7 @@ export class UI {
           <div class="kv"><span>Preset</span><b id="ws-preset">–</b></div>
           <div class="kv"><span>Frame rate</span><b id="ws-fps">–</b></div>
           <div class="kv"><span>Resolution scale</span><b id="ws-res">–</b></div>
-          <div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="gfx">Graphics settings…</button></div>
+          <div class="btn-row" style="margin-top:10px"><button class="btn primary" data-act="gfx">Graphics settings…</button><button class="btn" data-act="preview">Asset preview…</button></div>
         </div>
         <div class="section"><h4>World</h4>
           <div class="kv"><span>Seed</span><b>${this.world.seed}</b></div>
@@ -291,6 +291,7 @@ export class UI {
     switch (a.dataset.act) {
       case 'close-panel': this.closePanel(); break;
       case 'gfx': this.openGraphics?.(); break;
+      case 'preview': this.closePanel(); this.openPreview?.(); break;
       case 'save': this.save.save(false); break;
       case 'load':
         this.confirm({ title: 'Load saved world?', text: 'Your current world will be replaced by the last saved one.', ok: 'Load' }).then((ok) => { if (ok) this.save.load(); });

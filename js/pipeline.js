@@ -101,7 +101,7 @@ export class RenderPipeline {
       // sky, water and grass must not take part in the AO depth/normal pass
       const orig = g.render.bind(g);
       g.render = (...a) => {
-        const w = this.world, hide = [w.env.sky, w.waterMesh.mesh, w.vegetation.sets.grass.mesh, w.vegetation.sets.flower.mesh, w.vegetation.sets.reed.mesh, w.particles.smoke, w.particles.motes];
+        const w = this.world, hide = [w.env.sky, w.waterMesh.mesh, ...w.vegetation.meshesOf('grass', 'flower', 'reed', 'fern', 'tussock'), w.particles.smoke, w.particles.motes];
         const vis = hide.map((m) => m.visible);
         hide.forEach((m) => { m.visible = false; });
         const fog = this.scene.fog; this.scene.fog = null;
@@ -158,7 +158,7 @@ export class RenderPipeline {
     if (wm.reflQ >= 2) {
       // the reflection only needs the big shapes: skip grass, flowers, reeds, bushes, rocks and particles
       const v = this.world.vegetation.sets, p = this.world.particles;
-      const hide = [v.grass.mesh, v.flower.mesh, v.reed.mesh, v.bush.mesh, v.rock.mesh, p.smoke, p.motes];
+      const hide = [...this.world.vegetation.meshesOf('grass', 'flower', 'reed', 'fern', 'tussock', 'bush', 'rock'), p.smoke, p.motes];
       const vis = hide.map((m) => m.visible);
       hide.forEach((m) => { m.visible = false; });
       wm.renderReflection(this.renderer, this.scene, cam, this.pr);

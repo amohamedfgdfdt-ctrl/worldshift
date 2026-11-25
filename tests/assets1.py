@@ -37,6 +37,7 @@ async def main():
         b = await p.chromium.launch(executable_path='/usr/bin/google-chrome', args=['--no-sandbox','--use-angle=swiftshader','--use-gl=angle','--enable-unsafe-swiftshader','--ignore-gpu-blocklist'])
         pg = await b.new_page(viewport={'width':640,'height':400}); pg.set_default_timeout(300000)
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text[:200]) if m.type=='error' else None)
+        await pg.route('**/assets/manifest.json', lambda r: r.fulfill(status=404))  # unit tests start from the procedural world
         await pg.goto('http://localhost:8123/index.html'); await pg.wait_for_function('window.__terraReady===true')
         await pg.wait_for_timeout(2500)
         await pg.evaluate("TERRA.perf.dynamicRes=false; TERRA.ui.el.toasts.innerHTML=''; TERRA.sim.setRunning(false)")
@@ -50,7 +51,7 @@ async def main():
         v=await ev("""(async()=>{const {AssetManager}=await import('/js/assets.js');
           const bad={assets:{a:{category:'spaceship',url:'x.glb'},b:{category:'tree',target:'house_small',url:'x.glb'},c:{category:'rock'},d:{category:'tree',target:'oak',lods:[{url:'a'},{url:'b',distance:50},{url:'c',distance:40}]},e:{category:'rock',url:'r.glb',dimensions:{}},f:{category:'building',target:'house_small',url:'h.glb',fit:'stretch'},
             g:{category:'tree',target:'oak',lods:[{url:'a'},{url:'b',distance:50},{url:'c',distance:90}],dimensions:{height:9},fit:'height'}}};
-          const r=AssetManager.validate(bad); return {n:r.entries.length, ids:r.entries.map(e=>e.id), errors:r.errors.length, lods:r.entries[0]?.lods.map(l=>l.level+':'+l.distance)}})()""")
+          const r=AssetManager.validate(bad); return {n:r.entries.length, ids:r.entries.map(e=>e.id), errors:r.errors.length, lods:r.entries[0]?.variants[0].lods.map(l=>l.level+':'+l.distance)}})()""")
         ok(v['errors']==6 and v['ids']==['g'] and v['lods']==['high:0','medium:50','low:90'],'validate rejects 6 bad entries, accepts the good one',json.dumps(v))
 
         print('2. multi-material (several materials in one mesh via geometry groups)')

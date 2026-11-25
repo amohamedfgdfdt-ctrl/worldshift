@@ -29,19 +29,19 @@ All decoders are loaded lazily, only when a model actually uses the extension, f
 - **KTX2 / Basis** (`KHR_texture_basisu`): `vendor/decoders/basis/` (WASM). Transcoder initialises; **not tested with a real .ktx2 texture** (no encoder offline).
 Produce compressed files with `gltf-transform` (`optimize --compress draco|meshopt --texture-compress ktx2`) or gltfpack.
 
-## Models currently in use (`assets/models/`)
-| file | target | source model | tris | note |
-|---|---|---|---|---|
-| `oak.glb` | tree / oak | broadleaf tree, textured (WebP) | 1319 | fitted to 12 m tall |
-| `birch.glb` | tree / birch | slim white-trunk tree | 1113 | fitted to 11 m |
-| `pine.glb` | tree / pine | fir, textured (WebP) | 438 | fitted to 14 m |
-| `tree.glb` | tree / tree (player planted) | small broadleaf, textured (WebP) | 901 | fitted to 8 m |
-| `bush.glb` | shrub / bush | multi-trunk shrub | 1003 | fitted to 1.8 m |
-| `reed.glb` | shrub / reed | cattail clump | 448 | native size |
-| `rock.glb` | rock / rock | mossy boulder | 560 | fitted to a 3 m footprint |
 
-Grass and flowers are intentionally still procedural: a 300+ triangle tuft multiplied by thousands of instances is too heavy for phones.
+## Variants vs. LOD (manifest v2)
 
-**Source and licence:** the files carry the generator tag `3dassets.dev ingest`. Confirm the licence of that source before publishing, and add attribution here if it requires it.
+- A **variant** is a *different model* of the same species (young / mature / old oak, hawthorn vs. elder, boulder types). Variants are chosen per instance by `weight` through a stable hash, so a world always gets the same mix. Each variant becomes its own instanced set (`oak#young`, `oak#mature`, ...).
+- A **LOD level** is the *same model* at lower detail (`lods`: high / medium / low). Growth stages are never LODs.
+- An entry has `enabled: true|false`. `enabled:false` entries are listed in the preview but not applied to the world. `category: "ground"` is preview-only.
+- `pivot: "base-center"` puts the base of the model on y = 0 and centres the footprint. `fit: "height"` scales uniformly to `dimensions.height`; an extra `scale` multiplies on top.
+- If any variant fails, the others still load; if all fail, the procedural model stays.
 
-The files use `KHR_mesh_quantization` (integer positions with the scale in the node matrix) and `EXT_texture_webp`. `js/assets.js` converts quantized positions/normals to float before baking node transforms; without that step every model collapses into a 2×2×2 box (verified on these files).
+## In-game preview
+
+World panel > **Asset preview...** (or `index.html?preview=1`). Shows every manifest model at true size with a 1.8 m figure and 1 m grid, measured size, triangle count, material list, automated checks (base on ground, centred, opaque, normals, height matches manifest, triangle budget) and three lighting presets plus the game's current light. Nothing changes in the world until **Apply approved** is pressed. Rendering is in a separate scene with its own lights.
+
+## Pack: Dense Temperate Forest Flora
+
+Source: 3dassets.dev, author "3D Assets (3dassets)", licence CC0 1.0 Universal (no attribution required; credit kept in the manifest `source` blocks). The models are AI-generated, stylised low-poly, not realistic.

@@ -120,3 +120,7 @@ python3 tests/e2e.py ; python3 tests/e2e2.py
 **النسخة الاحتياطية للمرحلة 1:** المجلد `TERRA_backup_phase1` (خارج الـ ZIP الجديد).
 
 **تشغيل الاختبارات الجديدة:** `python3 tests/gfx8.py` (وظائف كل Preset)، `gfx11.py` (ذاكرة + إجهاد + جدول)، `gfx12.py` (واجهة + حفظ + Auto)، `gfx10.py` (GLB).
+
+
+## Asset preview
+World panel > Asset preview... or `?preview=1`. See ASSETS.md and REPORT_FLORA.md.

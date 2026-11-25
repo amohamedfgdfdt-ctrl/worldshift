@@ -61,6 +61,11 @@ async function boot() {
   const ui = new UI({ world, sim, tools, controls, save, perf, settings });
   const gfxUI = new GraphicsUI({ ui, world, gfx, perf, caps });
   ui.openGraphics = () => gfxUI.open();
+  let preview = null;
+  ui.openPreview = async () => {
+    if (!preview) { const { AssetPreview } = await import('./asset-preview.js'); preview = new AssetPreview(world, ui); window.TERRA.preview = preview; }
+    await preview.open();
+  };
 
   // restore the last world or start the default one
   let restored = false;
@@ -77,7 +82,7 @@ async function boot() {
   // debug / test hook (harmless in production)
   world.assets = new AssetManager(world);
   world.assets.loadManifest().catch(() => {});
-  window.TERRA = { world, sim, tools, controls, ui, save, perf, settings, gfx, gfxUI, caps };
+  window.TERRA = { openPreview: () => ui.openPreview(), world, sim, tools, controls, ui, save, perf, settings, gfx, gfxUI, caps };
 
   // refresh-rate probe (enables 90/120 FPS targets only when the display can show them)
   measureRefresh().then((hz) => { gfx.refreshHz = hz; if (gfxUI.isOpen) gfxUI.refresh(); });
@@ -100,6 +105,7 @@ async function boot() {
     const limit = gfx.values.fpsLimit;
     const minDt = 1000 / limit;
     if (now - last < minDt - 2.5) return;
+    if (preview?.active) { last = now; preview.frame(); return; }
     const dt = Math.min(0.1, Math.max(0.0001, (now - last) / 1000));
     const raw = (now - last) / 1000;
     last = now;
@@ -112,6 +118,7 @@ async function boot() {
   }
   requestAnimationFrame(frame);
   setTimeout(() => loading.classList.add('done'), 350);
+  if (new URLSearchParams(location.search).has('preview')) ui.openPreview();
   window.__terraReady = true;
 }
 

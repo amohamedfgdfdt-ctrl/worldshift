@@ -112,6 +112,8 @@ export class Vegetation {
       reed: new InstanceSet(buildReed(), this.grassMat, 500, { castShadow: false, name: 'env-reed' }),
       bush: new InstanceSet(buildBush(), this.windMat, 500, { name: 'env-bush' }),
       rock: new InstanceSet(buildRock(), this.solidMat, 400, { name: 'env-rock' }),
+      fern: new InstanceSet(grassGeometry(false), this.grassMat, 700, { castShadow: false, name: 'env-fern' }),
+      tussock: new InstanceSet(grassGeometry(false), this.grassMat, 700, { castShadow: false, name: 'env-tussock' }),
       grass: new InstanceSet(grassGeometry(false), this.grassMat, 6000, { castShadow: false, name: 'env-grass' }),
       flower: new InstanceSet(grassGeometry(true), this.grassMat, 1200, { castShadow: false, name: 'env-flower' }),
     };
@@ -121,14 +123,27 @@ export class Vegetation {
     this._lodCursor = 0;
     this.lodDist = 110;
     this.lodSwaps = 0;
+    this.variants = {};   // species -> { names:[set names], cum:[cumulative weights] } (growth stages / model variants)
+  }
+
+  /** logical species of a set name: 'oak#mature' -> 'oak', 'oakL' -> 'oak' */
+  static speciesOf(name) { const b = name.split('#')[0]; return b === 'oakL' || b === 'pineL' || b === 'birchL' ? b.slice(0, -1) : b; }
+
+  /** stable weighted pick of a variant set for an instance id (independent of the LOD/density rank) */
+  _route(key, id) {
+    const v = this.variants[key];
+    if (!v) return key;
+    const x = Math.sin(id * 39.3468 + 11.135) * 43758.5453; const r = (x - Math.floor(x)) * v.cum[v.cum.length - 1];
+    for (let i = 0; i < v.cum.length; i++) if (r < v.cum[i]) return v.names[i];
+    return v.names[v.names.length - 1];
   }
 
   setShadows(on) {
-    for (const k of ['oak', 'pine', 'birch', 'bush', 'rock']) this.sets[k].mesh.castShadow = on;
+    for (const [k, s] of Object.entries(this.sets)) if (['oak', 'pine', 'birch', 'bush', 'rock'].includes(Vegetation.speciesOf(k)) && !/L$/.test(k)) s.mesh.castShadow = on;
   }
 
   setDensity(f) {
-    for (const [k, s] of Object.entries(this.sets)) s.setFraction(k === 'grass' || k === 'flower' || k === 'reed' ? f * 0.85 : f);
+    for (const [k, s] of Object.entries(this.sets)) s.setFraction(['grass', 'flower', 'reed', 'fern', 'tussock'].includes(Vegetation.speciesOf(k)) ? f * 0.85 : f);
   }
 
   /**
@@ -162,38 +177,69 @@ export class Vegetation {
 
   /** Species that can be replaced by external models, and which cull distance they use. */
   static get SPECIES() {
-    return { oak: 'tree', pine: 'tree', birch: 'tree', bush: 'tree', rock: null, reed: 'grass', grass: 'grass', flower: 'grass' };
+    return { oak: 'tree', pine: 'tree', birch: 'tree', bush: 'tree', rock: null, reed: 'grass', grass: 'grass', flower: 'grass', fern: 'grass', tussock: 'grass' };
+  }
+
+  /** Every InstancedMesh of the given species (variants and LOD levels included). */
+  meshesOf(...species) {
+    const out = [];
+    for (const [k, s] of Object.entries(this.sets)) if (species.includes(Vegetation.speciesOf(k))) out.push(...(s.meshes ?? [s.mesh]));
+    return out;
   }
 
   cullFor(key) { const k = Vegetation.SPECIES[key]; return k === 'tree' ? this.cullTree : k === 'grass' ? this.cullGrass : null; }
 
   /**
-   * Replace one species with external detail levels [{geometry, material, distance}].
+   * Replace one species with external models.
+   * variants: [{ name, weight, levels:[{geometry, material, distance}] }]
+   *  - variants are different MODELS of the species (e.g. young / mature / old),
+   *    picked per instance by weight; they are never LOD levels.
+   *  - levels are the LOD levels of ONE variant (High/Medium/Low).
    * Every existing instance keeps its transform and tint.
    */
-  replaceSpecies(key, levels) {
-    const old = this.sets[key];
-    if (!old) throw new Error('unknown vegetation species: ' + key);
-    const fresh = new LodInstanceSet(levels, old.capacity, { castShadow: old.mesh.castShadow, name: 'env-' + key });
-    fresh.setFraction(old.fraction ?? 1);
+  replaceSpecies(key, variants) {
+    if (!(key in Vegetation.SPECIES)) throw new Error('unknown vegetation species: ' + key);
+    const prevNames = (this.variants[key]?.names) ?? [key];
+    const oldSets = [...new Set([...prevNames, key, key + 'L'])].filter((n) => this.sets[n]);
+    const capacity = this.sets[oldSets[0]].capacity;
+    const castShadow = this.sets[oldSets[0]].mesh.castShadow;
+    const frac = this.sets[oldSets[0]].fraction ?? 1;
+    // 1. read every instance of the species out of its current set
+    const saved = [];
     const m = new THREE.Matrix4(), c = new THREE.Color();
     for (const it of this.items) {
       if (it.key !== key) continue;
       const src = this.sets[it.set];
-      if (!src.getMatrix(it.id, m)) continue;
+      if (!src || !src.getMatrix(it.id, m)) continue;
       src.getColor(it.id, c);
-      fresh.add(it.id, m, c);
-      it.set = key; it.m = null; it.tint = null;
+      saved.push({ it, m: m.clone(), c: c.clone() });
     }
-    const gone = [key, key + 'L'];
-    for (const g of gone) {
-      const st = this.sets[g]; if (!st) continue;
+    // 2. build the new sets
+    const single = variants.length === 1;
+    const names = variants.map((v) => (single ? key : `${key}#${v.name}`));
+    const fresh = variants.map((v, i) => {
+      const st = new LodInstanceSet(v.levels, capacity, { castShadow, name: 'env-' + names[i] });
+      st.setFraction(frac);
+      return st;
+    });
+    let acc = 0;
+    const cum = variants.map((v) => (acc += v.weight));
+    // 3. retire the old sets
+    for (const n of oldSets) {
+      const st = this.sets[n];
       for (const mesh of st.meshes ?? [st.mesh]) this.group.remove(mesh);
       st.dispose?.(); st.mesh.dispose();
-      if (g !== key) delete this.sets[g];
+      delete this.sets[n];
     }
-    this.sets[key] = fresh;
-    for (const mesh of fresh.meshes) this.group.add(mesh);
+    names.forEach((n, i) => { this.sets[n] = fresh[i]; for (const mesh of fresh[i].meshes) this.group.add(mesh); });
+    this.variants[key] = single ? null : { names, cum };
+    if (single) delete this.variants[key];
+    // 4. put every instance back, routed to its variant
+    for (const { it, m: mm, c: cc } of saved) {
+      const to = single ? names[0] : this._route(key, it.id);
+      this.sets[to].add(it.id, mm, cc);
+      it.set = to; it.m = null; it.tint = null;
+    }
     return fresh;
   }
 
@@ -223,9 +269,10 @@ export class Vegetation {
       dummy.scale.set(sc, sc * (1 + tiltY), sc);
       dummy.updateMatrix();
       const id = this._id++;
-      this.sets[key].add(id, dummy.matrix, tint);
-      const lodable = (key === 'oak' || key === 'pine' || key === 'birch') && !(this.sets[key] instanceof LodInstanceSet);
-      this.items.push({ key, set: key, id, x, z, m: lodable ? dummy.matrix.clone() : null, tint: lodable ? tint : null });
+      const sk = this._route(key, id);
+      this.sets[sk].add(id, dummy.matrix, tint);
+      const lodable = (key === 'oak' || key === 'pine' || key === 'birch') && !(this.sets[sk] instanceof LodInstanceSet);
+      this.items.push({ key, set: sk, id, x, z, m: lodable ? dummy.matrix.clone() : null, tint: lodable ? tint : null });
     };
 
     // trees
@@ -285,6 +332,34 @@ export class Vegetation {
       rocks++;
     }
 
+    // ferns: forest understory (moist, shaded, near trees)
+    let ferns = 0;
+    for (let a = 0; a < 20000 && ferns < 260; a++) {
+      const x = (rng() * 2 - 1) * (HALF - 5), z = (rng() * 2 - 1) * (HALF - 5);
+      const h = f.heightAt(x, z), sl = f.slopeAt(x, z);
+      if (h > 40 || sl > 0.75 || wet(x, z, 2)) continue;
+      const forest = noise.fbm(x * 0.011, z * 0.011, 3) * 0.9 + noise.fbm(x * 0.045, z * 0.045, 2) * 0.35;
+      if (rng() > smoothstep(0.0, 0.35, forest) * 0.8) continue;
+      const t = 0.85 + rng() * 0.3;
+      col.setRGB(t * 0.95, t, t * 0.9);
+      put('fern', x, h, z, 0.75 + rng() * 0.6, col.clone());
+      ferns++;
+    }
+    // tussocks: open meadow
+    let tussocks = 0;
+    for (let a = 0; a < 20000 && tussocks < 420; a++) {
+      const x = (rng() * 2 - 1) * (HALF - 5), z = (rng() * 2 - 1) * (HALF - 5);
+      const h = f.heightAt(x, z), sl = f.slopeAt(x, z);
+      if (h > 36 || sl > 0.6 || wet(x, z, 2)) continue;
+      const d = noise.fbm(x * 0.03 - 40, z * 0.03 - 40, 3) * 0.5 + 0.5;
+      const forest = noise.fbm(x * 0.011, z * 0.011, 3) * 0.9;
+      if (rng() > smoothstep(0.3, 0.7, d) * (1 - smoothstep(0.1, 0.5, forest)) * 0.8 + 0.01) continue;
+      const t = 0.85 + rng() * 0.3;
+      col.setRGB(t, t * (0.97 + rng() * 0.06), t * 0.92);
+      put('tussock', x, h, z, 0.8 + rng() * 0.6, col.clone());
+      tussocks++;
+    }
+
     // grass tufts + flowers
     let grass = 0, flowers = 0;
     for (let a = 0; a < 26000 && grass < 5600; a++) {
@@ -307,7 +382,7 @@ export class Vegetation {
         flowers++;
       }
     }
-    return { trees, bushes, rocks, grass, flowers, reeds };
+    return { trees, bushes, rocks, grass, flowers, reeds, ferns, tussocks };
   }
 
   /** Remove environment items inside a world-space rectangle. */

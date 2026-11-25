@@ -1,13 +1,525 @@
 {
   "version": 2,
-  "decoders": { "path": "../vendor/decoders/" },
+  "decoders": {
+    "path": "../vendor/decoders/"
+  },
+  "pack": {
+    "name": "Dense Temperate Forest Flora",
+    "url": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+    "license": "CC0 1.0 Universal (no attribution required; credited in ASSETS.md)",
+    "files": 22
+  },
   "assets": {
-    "oak":   { "category": "tree",  "target": "oak",   "url": "models/oak.glb",   "dimensions": { "width": 10,  "height": 12,  "depth": 10 }, "fit": "height" },
-    "birch": { "category": "tree",  "target": "birch", "url": "models/birch.glb", "dimensions": { "width": 4,   "height": 11,  "depth": 4 },  "fit": "height" },
-    "pine":  { "category": "tree",  "target": "pine",  "url": "models/pine.glb",  "dimensions": { "width": 6,   "height": 14,  "depth": 5 },  "fit": "height" },
-    "tree":  { "category": "tree",  "target": "tree",  "url": "models/tree.glb",  "dimensions": { "width": 6,   "height": 8,   "depth": 6 },  "fit": "height" },
-    "bush":  { "category": "shrub", "target": "bush",  "url": "models/bush.glb",  "dimensions": { "width": 2.1, "height": 1.8, "depth": 1.9 }, "fit": "height" },
-    "reed":  { "category": "shrub", "target": "reed",  "url": "models/reed.glb" },
-    "rock":  { "category": "rock",  "target": "rock",  "url": "models/rock.glb",  "dimensions": { "width": 3,   "height": 2.2, "depth": 2.6 }, "fit": "footprint" }
+    "oak": {
+      "category": "tree",
+      "target": "oak",
+      "variants": [
+        {
+          "name": "young",
+          "weight": 0.25,
+          "url": "models/vegetation/trees/oak_young.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "young",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model.glb",
+            "sha256": "eb43d8c6814a0f0ade119c83ef7e72a1d210d0e7656f62b2c1d680a81526fbe4",
+            "bytes": 56452,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 4.2
+          }
+        },
+        {
+          "name": "mature",
+          "weight": 0.55,
+          "url": "models/vegetation/trees/oak_mature.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "mature",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (1).glb",
+            "sha256": "a71d177fe879f76c2df1035a5b2df26177d99a057d39e90bdfc90b82906eef70",
+            "bytes": 73856,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 9.5
+          }
+        },
+        {
+          "name": "old",
+          "weight": 0.2,
+          "url": "models/vegetation/trees/oak_old.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "old",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (2).glb",
+            "sha256": "f4506ae62cdc5e0ea4ecbe1c2827ac1c09463cb97e52ef221ac0420945f15c3c",
+            "bytes": 82536,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 8.5
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "birch": {
+      "category": "tree",
+      "target": "birch",
+      "variants": [
+        {
+          "name": "young",
+          "weight": 0.28,
+          "url": "models/vegetation/trees/birch_young.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "young",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (3).glb",
+            "sha256": "859b91b4ec72578817c2e7a3ba3bd5d800dcd332d461a2143f2bcf7e4e774af9",
+            "bytes": 34532,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 3.4
+          }
+        },
+        {
+          "name": "mature",
+          "weight": 0.52,
+          "url": "models/vegetation/trees/birch_mature.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "mature",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (4).glb",
+            "sha256": "628fb838e8ea189ace33a2de77d6cd8a689e4dd28922b200bb1ad20e2251239e",
+            "bytes": 49128,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 9.0
+          }
+        },
+        {
+          "name": "old",
+          "weight": 0.2,
+          "url": "models/vegetation/trees/birch_old.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "old",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (5).glb",
+            "sha256": "e775a207199c4e3341830acb7898a479021db42ec86637f3a6b9c4120959b2be",
+            "bytes": 52764,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 8.0
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "pine": {
+      "category": "tree",
+      "target": "pine",
+      "variants": [
+        {
+          "name": "young",
+          "weight": 0.25,
+          "url": "models/vegetation/trees/scots_pine_young.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "young",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (6).glb",
+            "sha256": "40b9d981c61a9f4c0cef7d0d0ca8190f83751f35b03963eada7369635d2c253f",
+            "bytes": 42052,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 3.2
+          }
+        },
+        {
+          "name": "mature",
+          "weight": 0.55,
+          "url": "models/vegetation/trees/scots_pine_mature.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "mature",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (7).glb",
+            "sha256": "3391ac98e7df484c0ac8e533bfd9c284b348cc7da59514d93645571808e2d0d4",
+            "bytes": 73152,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 11.0
+          }
+        },
+        {
+          "name": "old",
+          "weight": 0.2,
+          "url": "models/vegetation/trees/scots_pine_old.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "old",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (8).glb",
+            "sha256": "b8b2eb8f637f9d2c3b3e6bf7d68c0f0c6a2070a877cf73aad0d711ecaf6abdb0",
+            "bytes": 79240,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 10.0
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "bush": {
+      "category": "shrub",
+      "target": "bush",
+      "variants": [
+        {
+          "name": "hawthorn",
+          "weight": 0.5,
+          "url": "models/vegetation/understory/hawthorn_bush.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "hawthorn",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (9).glb",
+            "sha256": "70b7cb86e2947f373d1656b2e285255d1859cdb5f56d423ce2ceaa04929276d6",
+            "bytes": 32212,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 1.8
+          }
+        },
+        {
+          "name": "elder",
+          "weight": 0.5,
+          "url": "models/vegetation/understory/elder_bush.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "elder",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (10).glb",
+            "sha256": "18a83e8086d520779c4a50e397ea52b2e67ddea055d29d2257a4c78e5e684c10",
+            "bytes": 37948,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 2.3
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "fern": {
+      "category": "plant",
+      "target": "fern",
+      "variants": [
+        {
+          "name": "lady_fern",
+          "weight": 0.7,
+          "url": "models/vegetation/understory/lady_fern.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "lady_fern",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (15).glb",
+            "sha256": "59677e30b66fd0eb47e03e56c739f40e917b0aa3fc13378537d11e000270a14e",
+            "bytes": 22904,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 0.8
+          }
+        },
+        {
+          "name": "bracken",
+          "weight": 0.3,
+          "url": "models/vegetation/understory/bracken_stand.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "bracken",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (11).glb",
+            "sha256": "51fec028c0711a64222d0111e59c32c8e7d0af596876d38aea439a21726e7bfc",
+            "bytes": 82996,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 1.1
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "tussock": {
+      "category": "plant",
+      "target": "tussock",
+      "variants": [
+        {
+          "name": "tall_grass",
+          "weight": 1,
+          "url": "models/vegetation/understory/tall_grass_tussock.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "tall_grass",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (12).glb",
+            "sha256": "58120e60580c3e7e25b5348e70134743e745fb6c302b8e46b364264392ee4d8d",
+            "bytes": 14124,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 0.9
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "reed": {
+      "category": "shrub",
+      "target": "reed",
+      "variants": [
+        {
+          "name": "reed_clump",
+          "weight": 1,
+          "url": "models/vegetation/understory/reed_clump.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "reed_clump",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (13).glb",
+            "sha256": "4d440c801bcfd3a3fd0843add8cc95cb1d9c2fea205273479a9c28fbfadbd9bb",
+            "bytes": 17268,
+            "note": "AI-generated low-poly asset"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 1.7
+          }
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "rock": {
+      "category": "rock",
+      "target": "rock",
+      "variants": [
+        {
+          "name": "boulder_a",
+          "weight": 0.28,
+          "url": "models/environment/rocks/boulder_medium_a.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "boulder_a",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (17).glb",
+            "sha256": "c81a80b01669ef40a1774d20db49e50751de558a4bec2b6f82c86518f4036557",
+            "bytes": 7040,
+            "note": "AI-generated low-poly asset"
+          },
+          "scale": 0.85
+        },
+        {
+          "name": "boulder_b",
+          "weight": 0.28,
+          "url": "models/environment/rocks/boulder_medium_b.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "boulder_b",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (18).glb",
+            "sha256": "fe1987146efe6a0a2940d81ad7d80c65dd42fb68289cc0fed40d3f4e02683452",
+            "bytes": 9136,
+            "note": "AI-generated low-poly asset"
+          },
+          "scale": 0.85
+        },
+        {
+          "name": "mossy_large",
+          "weight": 0.2,
+          "url": "models/environment/rocks/mossy_boulder_large.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "mossy_large",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (16).glb",
+            "sha256": "0b959db7025e7783fcb0f12916924915462dcb1231aa31ced0a0c95133689779",
+            "bytes": 32192,
+            "note": "AI-generated low-poly asset"
+          },
+          "scale": 0.65
+        },
+        {
+          "name": "cluster",
+          "weight": 0.19,
+          "url": "models/environment/rocks/rock_cluster.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "cluster",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (19).glb",
+            "sha256": "d5981ed1da04817395fba909537fc7a7391974f406fbd1d3a62a67fd863d94b9",
+            "bytes": 25356,
+            "note": "AI-generated low-poly asset"
+          },
+          "scale": 0.85
+        },
+        {
+          "name": "outcrop_ferns",
+          "weight": 0.05,
+          "url": "models/environment/rocks/rocky_outcrop_with_ferns.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "outcrop_ferns",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (20).glb",
+            "sha256": "57899342129dfdc345139b117e42b1af38a2c9bacca70dc559d9769a670a6b80",
+            "bytes": 67436,
+            "note": "AI-generated low-poly asset"
+          },
+          "scale": 0.55
+        }
+      ],
+      "enabled": true,
+      "note": "Verified in the in-game preview (scale, pivot, materials, lighting)."
+    },
+    "ground": {
+      "category": "ground",
+      "target": "ground",
+      "note": "preview only: no world system places ground tiles yet Preview only: thick 2x2 m slabs do not fit the terrain heightfield.",
+      "variants": [
+        {
+          "name": "forest_floor",
+          "weight": 1,
+          "url": "models/environment/ground/forest_floor_tile.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "forest_floor",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (22).glb",
+            "sha256": "04f17dc42fad9ee6341a1ad4cd71a678a3d3d61c20041be05869e5514bdf8265",
+            "bytes": 47424,
+            "note": "AI-generated low-poly asset"
+          }
+        },
+        {
+          "name": "moss_carpet",
+          "weight": 1,
+          "url": "models/environment/ground/moss_carpet_tile.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "moss_carpet",
+            "pack": "Dense Temperate Forest Flora",
+            "packUrl": "https://3dassets.dev/packs/dense-temperate-forest-flora",
+            "author": "3D Assets (3dassets)",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "model (21).glb",
+            "sha256": "d507bc3d9e46551194a09a44e5e5cb9a79fece76f301809643e2822477d6d0fc",
+            "bytes": 41772,
+            "note": "AI-generated low-poly asset"
+          }
+        }
+      ],
+      "enabled": false
+    }
   }
 }
