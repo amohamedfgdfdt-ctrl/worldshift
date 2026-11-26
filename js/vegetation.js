@@ -142,6 +142,22 @@ export class Vegetation {
     for (const [k, s] of Object.entries(this.sets)) if (['oak', 'pine', 'birch', 'bush', 'rock'].includes(Vegetation.speciesOf(k)) && !/L$/.test(k)) s.mesh.castShadow = on;
   }
 
+  /** Preset-driven multiplier for every LOD switch distance of the external models. */
+  setLodScale(f) {
+    this.lodScale = f;
+    for (const st of Object.values(this.sets)) if (st.updateLod) { st.lodScale = f; st._all = true; }
+  }
+
+  /** Diagnostics: switch instance distance/frustum culling on or off. */
+  setCulling(on) { for (const st of Object.values(this.sets)) if (st.updateLod) { st.noCull = !on; st._all = true; } }
+
+  /** Cull / LOD statistics for diagnostics: per set, instances per level and culled counts. */
+  stats() {
+    const out = {};
+    for (const [k, st] of Object.entries(this.sets)) if (st.levelCounts) out[k] = { total: st.count, levels: st.levelCounts(), ...st.stats };
+    return out;
+  }
+
   setDensity(f) {
     for (const [k, s] of Object.entries(this.sets)) s.setFraction(['grass', 'flower', 'reed', 'fern', 'tussock'].includes(Vegetation.speciesOf(k)) ? f * 0.85 : f);
   }
@@ -151,8 +167,8 @@ export class Vegetation {
    * model. A quarter of the trees is examined per call (round-robin), with
    * hysteresis so trees never flicker at the boundary.
    */
-  updateLod(camPos) {
-    for (const st of Object.values(this.sets)) if (st.updateLod) st.updateLod(camPos);
+  updateLod(camPos, frustum = null) {
+    for (const st of Object.values(this.sets)) if (st.updateLod) st.updateLod(camPos, frustum);
     const items = this.items;
     const n = items.length; if (!n) return;
     const per = Math.ceil(n / 4);
@@ -218,7 +234,8 @@ export class Vegetation {
     const single = variants.length === 1;
     const names = variants.map((v) => (single ? key : `${key}#${v.name}`));
     const fresh = variants.map((v, i) => {
-      const st = new LodInstanceSet(v.levels, capacity, { castShadow, name: 'env-' + names[i] });
+      const st = new LodInstanceSet(v.levels, capacity, { castShadow, name: 'env-' + names[i], cull: this.cullFor(key) ?? this.cullTree });
+      st.lodScale = this.lodScale ?? 1;
       st.setFraction(frac);
       return st;
     });

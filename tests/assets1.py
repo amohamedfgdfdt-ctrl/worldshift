@@ -86,11 +86,11 @@ async def main():
           const id=s.ids[0];const m=new TERRA.world.renderer.constructor.prototype.constructor===0?null:null;
           const e=s.rec.get(id).m.elements;cam.set(e[12],e[13]+3,e[14]);c('on a tree');
           cam.copy(keep);return out})()""")
-        ok(d['very far'][2]>0 and d['very far'][0]==0,'far camera -> low LOD',str(d['very far']))
+        ok(d['very far'][0]==0 and (d['very far'][2]>0 or sum(d['very far'])==0),'far camera -> low LOD or distance-culled (beyond draw distance)',str(d['very far']))
         ok(d['on a tree'][0]>=1,'camera next to a tree -> high LOD for it',str(d['on a tree']))
         den=await ev("""(()=>{const w=TERRA.world,s=w.vegetation.sets.oak,cam=w.rig.camera.position;const tot=s.count;
-          w.vegetation.setDensity(0.5);s._all=true;s.updateLod(cam);const half=s.levelCounts().reduce((a,b)=>a+b,0);
-          w.vegetation.setDensity(1);s._all=true;s.updateLod(cam);const full=s.levelCounts().reduce((a,b)=>a+b,0);return {tot,half,full}})()""")
+          w.vegetation.setCulling(false);w.vegetation.setDensity(0.5);s._all=true;s.updateLod(cam);const half=s.levelCounts().reduce((a,b)=>a+b,0);
+          w.vegetation.setDensity(1);s._all=true;s.updateLod(cam);const full=s.levelCounts().reduce((a,b)=>a+b,0);w.vegetation.setCulling(true);return {tot,half,full}})()""")
         ok(abs(den['half']/den['tot']-0.5)<0.12 and den['full']==den['tot'],'vegetation density setting still works on GLB trees',json.dumps(den))
         sh=await ev("""(()=>{const w=TERRA.world,s=w.vegetation.sets.oak;w.gfx.shadowRes=1024;w.gfx.foliageQuality=2;w.refreshAssetState();const on=s.meshes.map(m=>m.castShadow);w.vegetation.setShadows(false);return {on,off:s.meshes.map(m=>m.castShadow)}})()""")
         ok(sh['on']==[True,True,False] and sh['off']==[False,False,False],'shadow setting applies per LOD (near levels cast, far does not)',json.dumps(sh))

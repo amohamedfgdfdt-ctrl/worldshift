@@ -5,13 +5,14 @@ import { Controls } from './controls.js';
 import { Tools } from './tools.js';
 import { SaveSystem } from './save-system.js';
 import { UI } from './ui.js';
-import { initI18n } from './i18n.js';
 import { PerformanceMonitor, runBenchmark } from './performance.js';
 import { GraphicsSettings, detectCaps, measureRefresh, PRESETS } from './graphics.js';
 import { GraphicsUI } from './graphics-ui.js';
 import { AssetManager } from './assets.js';
 import { windUniforms } from './vegetation.js';
 import { DEFAULT_SEED, isTouchDevice } from './config.js';
+import { Economy, EventSystem } from './economy.js';
+import { GameMode } from './campaign-ui.js';
 
 function webglOk() {
   try {
@@ -22,7 +23,6 @@ function webglOk() {
 
 async function boot() {
   const loading = document.getElementById('loading');
-  initI18n();
   if (!webglOk()) {
     loading.classList.add('done');
     document.getElementById('nogl').hidden = false;
@@ -41,6 +41,8 @@ async function boot() {
   world.applyGraphics(gfx.values, caps);
   world.gfxPresetLabel = gfx.preset;
   const sim = new Simulation(world);
+  sim.economy = new Economy(world, sim);
+  sim.events = new EventSystem(world, sim.economy);
   const controls = new Controls(canvas, world.rig);
   const tools = new Tools(world, controls);
   const perf = new PerformanceMonitor(world, gfx);
@@ -61,6 +63,7 @@ async function boot() {
   const ui = new UI({ world, sim, tools, controls, save, perf, settings });
   const gfxUI = new GraphicsUI({ ui, world, gfx, perf, caps });
   ui.openGraphics = () => gfxUI.open();
+  const gameMode = new GameMode({ world, sim, tools, save, ui });
   let preview = null;
   ui.openPreview = async () => {
     if (!preview) { const { AssetPreview } = await import('./asset-preview.js'); preview = new AssetPreview(world, ui); window.TERRA.preview = preview; }
@@ -82,7 +85,7 @@ async function boot() {
   // debug / test hook (harmless in production)
   world.assets = new AssetManager(world);
   world.assets.loadManifest().catch(() => {});
-  window.TERRA = { openPreview: () => ui.openPreview(), world, sim, tools, controls, ui, save, perf, settings, gfx, gfxUI, caps };
+  window.TERRA = { gameMode, campaign: gameMode.campaign, openPreview: () => ui.openPreview(), world, sim, tools, controls, ui, save, perf, settings, gfx, gfxUI, caps };
 
   // refresh-rate probe (enables 90/120 FPS targets only when the display can show them)
   measureRefresh().then((hz) => { gfx.refreshHz = hz; if (gfxUI.isOpen) gfxUI.refresh(); });
@@ -119,6 +122,7 @@ async function boot() {
   requestAnimationFrame(frame);
   setTimeout(() => loading.classList.add('done'), 350);
   if (new URLSearchParams(location.search).has('preview')) ui.openPreview();
+  gameMode.boot();
   window.__terraReady = true;
 }
 

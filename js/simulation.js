@@ -17,6 +17,9 @@ export class Simulation extends Emitter {
     this._acc = 0;
     this._popAcc = 0;
     this.stepsLastFrame = 0;
+    this.economy = null;                // set by main.js (Economy)
+    this.events = null;                 // EventSystem
+    this.campaign = null;               // Campaign (null = Sandbox behaviour)
   }
 
   get hour() { return (this.minutes / 60) % 24; }
@@ -52,6 +55,12 @@ export class Simulation extends Emitter {
     for (let s = 0; s < steps; s++) water.step(1, true);
     this.stepsLastFrame = steps;
 
+    // economy / events / campaign run on game time (also when the day cycle is frozen)
+    const gm = sdt * GAME_MIN_PER_SEC;
+    this.events?.update(gm);
+    this.economy?.update(gm);
+    this.campaign?.update(gm);
+
     this._popAcc += sdt;
     if (this._popAcc >= 1.5) { this._popAcc = 0; this._populationTick(); }
   }
@@ -63,8 +72,9 @@ export class Simulation extends Emitter {
       const t = TYPES[b.key];
       if (t.kind !== 'house') continue;
       const flood = bs.floodInfo(b).depth;
-      if (flood > 0.5) { if (b.state.residents > 0) { b.state.residents--; changed = true; } }
-      else if (b.state.residents < t.capacity) { b.state.residents++; changed = true; }
+      const eco = this.economy?.enforce ? this.economy : null;   // Campaign: needs gate growth
+      if (flood > 0.5 || (eco && eco.mustLeave())) { if (b.state.residents > 0) { b.state.residents--; changed = true; } }
+      else if (b.state.residents < t.capacity && (!eco || eco.canGrow())) { b.state.residents++; changed = true; }
     }
     if (changed) this.emit('population');
   }

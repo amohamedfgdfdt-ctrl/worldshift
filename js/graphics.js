@@ -212,7 +212,15 @@ export class GraphicsSettings extends Emitter {
     else if (benchMs < 6) p = 'high';
     else if (benchMs < 12) p = 'medium';
     else p = 'low';
-    if (c.touch && p === 'ultra') p = 'high';
+    // Mobile profile: phones and tablets heat up and throttle, so Ultra is never suggested, High only
+    // for a clearly strong device, and a weak one (little memory / few cores) starts on Low.
+    if (c.touch) {
+      const weak = (c.memoryGB && c.memoryGB <= 4) || (c.cores && c.cores <= 4);
+      const strong = c.memoryGB >= 6 && c.cores >= 8;
+      if (p === 'ultra') p = 'high';
+      if (p === 'high' && !strong) p = 'medium';
+      if (weak && p !== 'low') { p = 'low'; notes.push('Mobile device with limited memory or cores: lightest preset suggested to limit heat and stutter.'); }
+    }
     if (!c.float && (p === 'ultra' || p === 'high')) { p = 'medium'; notes.push('Float render targets unavailable.'); }
     if (c.dpr >= 3 && p !== 'low') notes.push('High pixel density screen: render scale kept in check.');
     if (benchMs != null) notes.push(`Benchmark: about ${benchMs.toFixed(1)} ms per frame at Medium (upper bound when the display refresh caps the test).`);

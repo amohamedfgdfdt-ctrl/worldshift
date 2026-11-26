@@ -11,6 +11,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { TYPES } from './buildings.js';
 import { Vegetation, windify } from './vegetation.js';
+import { simplifyGeometry } from './lod-gen.js';
 import { LodInstanceSet } from './instances.js';
 
 const VEG = Object.keys(Vegetation.SPECIES);
@@ -91,7 +92,7 @@ export class AssetManager {
         if (!['none', 'base-center'].includes(pivot)) { bad2('pivot must be none or base-center'); ok = false; continue; }
         const weight = v.weight ?? 1;
         if (!(weight > 0)) { bad2('weight must be > 0'); ok = false; continue; }
-        variants.push({ name: vn, weight, lods, dimensions: d || null, fit, pivot, scale: v.scale ?? 1, yOffset: v.yOffset ?? 0, source: v.source || a.source || null });
+        variants.push({ name: vn, weight, category, autoLod: (v.autoLod ?? a.autoLod) !== false, lods, dimensions: d || null, fit, pivot, scale: v.scale ?? 1, yOffset: v.yOffset ?? 0, source: v.source || a.source || null });
       }
       if (!ok && !variants.length) continue;
       if (!ok) errors.push(`${id}: some variants were rejected, the valid ones are kept`);
@@ -183,6 +184,17 @@ export class AssetManager {
       lv.geometry.scale(s, s, s); lv.geometry.translate(0, v.yOffset, 0);
       lv.geometry.computeBoundingBox(); lv.geometry.computeBoundingSphere();
       lv.box = lv.geometry.boundingBox.clone();
+    }
+    // models that ship with ONE detail level get generated medium / low levels, so distance LOD works for every asset
+    if (levels.length === 1 && v.autoLod && v.category !== 'building' && v.category !== 'ground') {
+      const def = DEFAULT_DISTANCES[v.category] || DEFAULT_DISTANCES.tree;
+      let prev = levels[0];
+      for (const [i, ratio] of [[1, 0.4], [2, 0.15]]) {
+        const r = simplifyGeometry(prev.geometry, i === 1 ? ratio : ratio / 0.4, { minTris: 220 });
+        if (!r || r.tris > prev.tris * 0.75) break;
+        const lv = { geometry: r.geometry, materials: prev.materials, tris: r.tris, box: r.geometry.boundingBox.clone(), distance: def[i], url: 'auto-lod', level: LEVEL_NAMES[i] };
+        levels.push(lv); prev = lv;
+      }
     }
     const size = levels[0].box.getSize(new THREE.Vector3());
     if (v.dimensions && v.fit === 'none') {

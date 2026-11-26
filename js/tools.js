@@ -13,6 +13,7 @@ export class Tools extends Emitter {
     super();
     this.world = world; this.controls = controls;
     this.mode = 'select';
+    this.gate = null;                // set by the Campaign (costs + locks); null in Sandbox
     this.key = null;               // building key in build mode
     this.rot = 0;
     this.anchor = null;            // road chain start [cx,cz]
@@ -66,6 +67,11 @@ export class Tools extends Emitter {
 
   // ---------------------------------------------------------------- modes
   setMode(mode, key = null) {
+    const g = this.gate;                                   // Campaign: locked buildings / tools
+    if (g && mode !== 'select') {
+      const locked = mode === 'build' ? g.isLocked(key) : (mode === 'drain' || mode === 'pour' || mode === 'source') ? g.isLocked(mode, true) : false;
+      if (locked) { this.emit('toast', { text: g.lockText(mode === 'build' ? key : mode, mode !== 'build'), kind: 'warn' }); return; }
+    }
     if (mode === this.mode && key === this.key) { if (mode !== 'select') return this.cancel(); return; }
     this.mode = mode; this.key = key; this.anchor = null; this.eval = null; this.lastTouchCell = null;
     this.rot = 0;
@@ -260,20 +266,27 @@ export class Tools extends Emitter {
     const w = this.world, bs = w.buildings;
     if (this.mode === 'build' && this.eval) {
       const ev = this.eval;
+      const g = this.gate?.canPlace(this.key);
+      if (g && !g.ok) { this.emit('toast', { text: g.reason, kind: 'warn' }); return; }
       const res = bs.place(this.key, ev.cx, ev.cz, this.rot);
-      if (res.ok) this.emit('toast', { text: `${TYPES[this.key].name} placed`, kind: 'ok' });
+      if (res.ok) { this.gate?.placed(this.key); this.emit('toast', { text: `${TYPES[this.key].name} placed`, kind: 'ok' }); }
       else this.emit('toast', { text: res.reason, kind: 'warn' });
     } else if (this.mode === 'road' && this.eval?.cell) {
       const cell = this.eval.cell;
       const path = this.anchor ? this._linePath(this.anchor, cell) : [cell];
       let n = 0, reason = '';
-      for (const [i, j] of path) { const r = bs.placeRoad(i, j); if (r.ok) n++; else if (!r.exists) reason = r.reason; }
+      for (const [i, j] of path) {
+        const g = this.gate?.canPlace('road'); if (g && !g.ok) { reason = g.reason; break; }
+        const r = bs.placeRoad(i, j); if (r.ok) { n++; this.gate?.placed('road'); } else if (!r.exists) reason = r.reason;
+      }
       if (n) { this.emit('toast', { text: `${n} road tile${n > 1 ? 's' : ''} built`, kind: 'ok' }); this.anchor = cell; }
       else if (this.anchor === null && this.eval.exists) this.anchor = cell;
       else this.emit('toast', { text: reason || this.eval.reason || 'Cannot build here', kind: 'warn' });
     } else if (this.mode === 'source' && this.eval) {
-      const r = bs.placeSource(this.eval.i, this.eval.j, this.sourceRate);
-      if (r.ok) { this.emit('toast', { text: 'Water source placed', kind: 'ok' }); }
+      const g = this.gate?.canPlace('source');
+      if (g && !g.ok) { this.emit('toast', { text: g.reason, kind: 'warn' }); return; }
+      const r = bs.placeSource(this.eval.i, this.eval.j, this.gate ? Math.min(10, this.sourceRate) : this.sourceRate);
+      if (r.ok) { this.gate?.placed('source'); this.emit('toast', { text: 'Water source placed', kind: 'ok' }); }
       else this.emit('toast', { text: r.reason, kind: 'warn' });
     }
   }
@@ -317,9 +330,9 @@ export class Tools extends Emitter {
     if (!s) return false;
     const bs = this.world.buildings;
     let ok = false, name = '';
-    if (s.kind === 'building') { name = TYPES[bs.buildings.get(s.id)?.key]?.name || 'Building'; ok = bs.remove(s.id); }
-    else if (s.kind === 'road') { name = 'Road'; ok = bs.removeRoad(s.cx, s.cz); }
-    else if (s.kind === 'source') { name = 'Water source'; bs.removeSource(s.id); ok = true; }
+    if (s.kind === 'building') { const k = bs.buildings.get(s.id)?.key; name = TYPES[k]?.name || 'Building'; ok = bs.remove(s.id); if (ok && k) this.gate?.removed(k); }
+    else if (s.kind === 'road') { name = 'Road'; ok = bs.removeRoad(s.cx, s.cz); if (ok) this.gate?.removed('road'); }
+    else if (s.kind === 'source') { name = 'Water source'; bs.removeSource(s.id); ok = true; this.gate?.removed('source'); }
     if (ok) { this.emit('toast', { text: `${name} removed`, kind: 'ok' }); this.select(null); }
     return ok;
   }

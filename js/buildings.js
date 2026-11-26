@@ -113,6 +113,33 @@ function waterTank() {
   return b.build();
 }
 
+
+function solarPlant() {
+  const b = new ModelBuilder();
+  b.box(9.2, 0.25, 7.6, 0, 0, 0, hex(0x9c9a94));
+  for (const z of [-2.2, 0, 2.2]) for (const x of [-2.4, 2.4]) {
+    b.box(0.14, 0.9, 0.14, x, 0.25, z, hex(0x6c747c));
+    b.box(3.6, 0.1, 1.7, x, 1.1, z, hex(0x23385c));          // panel
+    b.box(3.6, 0.04, 0.06, x, 1.2, z - 0.4, hex(0x8fa7d0));
+    b.box(3.6, 0.04, 0.06, x, 1.2, z + 0.4, hex(0x8fa7d0));
+  }
+  b.box(1.4, 1.3, 1.1, 0, 0.25, -3.1, hex(0xd7d4cb));        // inverter hut
+  return b.build();
+}
+
+function windTurbine() {
+  const b = new ModelBuilder();
+  b.cyl(1.6, 1.8, 0.4, 0, 0, 0, hex(0x9c9a94), { seg: 14 });
+  b.cyl(0.28, 0.5, 8.5, 0, 0.4, 0, hex(0xeceff2), { seg: 12 });
+  b.box(0.9, 0.8, 1.7, 0, 8.7, 0, hex(0xdfe3e8));
+  b.cyl(0.3, 0.3, 0.4, 0, 8.9, 1.0, hex(0xb8bec6), { seg: 10 });
+  for (let i = 0; i < 3; i++) {                              // three blades, fixed pose
+    const a = i * Math.PI * 2 / 3 + 0.35;
+    b.box(0.22, 4.4, 0.12, Math.sin(a) * 2.2, 8.9 + Math.cos(a) * 2.2 - 2.2, 1.3, hex(0xf4f6f8), { rz: -a });
+  }
+  return b.build();
+}
+
 function farm() {
   const b = new ModelBuilder();
   b.box(11.2, 0.22, 11.2, 0, 0, 0, hex(0x5a4331), { jitter: 0.2 });
@@ -271,6 +298,14 @@ export const TYPES = {
   water_tank: {
     key: 'water_tank', name: 'Water Tank', category: 'infrastructure', icon: 'tank', w: 2, d: 2,
     desc: 'Collects water from the surrounding ground and stores it.', capacity: 30000, maxDiff: 1.6, build: waterTank, tint: 'neutral', cap: 60, kind: 'tank',
+  },
+  solar_plant: {
+    key: 'solar_plant', name: 'Solar Plant', category: 'infrastructure', icon: 'sun', w: 3, d: 3,
+    desc: 'Photovoltaic panels. Output follows the sun and is zero at night.', maxDiff: 1.4, build: solarPlant, tint: 'neutral', cap: 60, kind: 'power',
+  },
+  wind_turbine: {
+    key: 'wind_turbine', name: 'Wind Turbine', category: 'infrastructure', icon: 'wind', w: 2, d: 2,
+    desc: 'Steady output that grows with the wind setting. Works at night.', maxDiff: 1.6, build: windTurbine, tint: 'neutral', cap: 60, kind: 'power',
   },
   road: {
     key: 'road', name: 'Road', category: 'infrastructure', icon: 'road', w: 1, d: 1,

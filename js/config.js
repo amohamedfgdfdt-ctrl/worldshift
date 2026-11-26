@@ -10,6 +10,7 @@ export const DEFAULT_SEED = 7;
 
 export const SAVE_KEY = 'worldshift.terra.save.v1';
 export const SAVE_VERSION = 1;
+export const CAMPAIGN_SAVE_KEY = 'worldshift.terra.campaign.run.v1';   // separate slot: Sandbox save is never touched by the Campaign
 
 // Simulation
 export const GRAVITY = 9.81;

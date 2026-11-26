@@ -45,3 +45,8 @@ World panel > **Asset preview...** (or `index.html?preview=1`). Shows every mani
 ## Pack: Dense Temperate Forest Flora
 
 Source: 3dassets.dev, author "3D Assets (3dassets)", licence CC0 1.0 Universal (no attribution required; credit kept in the manifest `source` blocks). The models are AI-generated, stylised low-poly, not realistic.
+
+
+## Automatic LOD (Phase 3)
+
+A variant with a single model file gets generated medium and low levels at load (vertex clustering, `js/lod-gen.js`, ~40 % and ~15 % of the triangles; skipped under 220 triangles; buildings and ground excluded). `"autoLod": false` on an entry or variant turns it off. Report: `assets.report()` lists each level with `url: "auto-lod"`. The generated levels share the original materials and textures (no extra texture memory). Hand-made `lods` in the manifest always win and are never replaced.

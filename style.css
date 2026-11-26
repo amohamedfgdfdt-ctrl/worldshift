@@ -197,7 +197,7 @@ input[type=range]:active::-webkit-slider-thumb { box-shadow: 0 2px 8px rgba(0, 0
 .toast { padding: 9px 16px; border-radius: 99px; background: rgba(17, 19, 29, .9); border: 1px solid var(--border-strong); font-size: 13px; font-weight: 600; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); animation: toastIn .35s var(--ease) both; }
 .toast.ok { border-color: rgba(94, 224, 160, .5); } .toast.warn { border-color: rgba(255, 191, 94, .55); color: var(--warn); } .toast.out { animation: toastOut .3s ease forwards; }
 #modal-root { position: absolute; inset: 0; z-index: 50; pointer-events: none; }
-.modal-bg { position: absolute; inset: 0; background: rgba(5, 6, 10, .6); background-color: rgba(5, 6, 10, .72); display: grid; place-items: center; padding: 20px; pointer-events: auto; animation: fade .2s ease both; }
+.modal-bg { position: absolute; inset: 0; background: rgba(5, 6, 10, .6); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: grid; place-items: center; padding: 20px; pointer-events: auto; animation: fade .2s ease both; }
 .modal { width: min(400px, 100%); padding: 20px; background: var(--panel-solid); border: 1px solid var(--border-strong); border-radius: 18px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); animation: popIn .3s var(--ease) both; }
 .modal h3 { margin: 0 0 6px; font-size: 18px; } .modal p { margin: 0 0 16px; color: var(--muted); }
 #loading, #nogl { position: absolute; inset: 0; z-index: 100; display: grid; place-items: center; background: radial-gradient(ellipse at 50% 40%, #171a2b, var(--bg) 70%); transition: opacity .6s ease, visibility .6s; }

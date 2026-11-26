@@ -40,6 +40,7 @@ export class World extends Emitter {
     this.scene = new THREE.Scene();
     this.gfx = { ...PRESETS.medium };
     this.drsScale = 1;
+    this._pv = new THREE.Matrix4(); this._frustum = new THREE.Frustum();
     this.caps = null;
     this.pipeline = new RenderPipeline(this);
     this.textures = createTextures(256);
@@ -165,12 +166,14 @@ export class World extends Emitter {
     const dd = g.drawDistance;
     this.vegetation.cullTree.value = 620 * dd;
     this.vegetation.cullGrass.value = 175 * dd;
+    this.vegetation.setLodScale([0.6, 0.85, 1][g.foliageQuality] * Math.sqrt(dd));
     this.vegetation.lodDist = (g.foliageQuality >= 2 ? 150 : g.foliageQuality === 1 ? 110 : 70) * dd;
     this.env.fogDensityBase = 0.0014 / dd;
     this.scene.fog.density = this.env.fogDensityBase;
     // --- pipeline + resolution
     this.pipeline.configure(g, this.caps || { float: true, maxSamples: 4 });
     this.resize();
+    if (this.perf) this.perf._cool = Math.max(this.perf._cool || 0, 2.5);   // let the new settings settle before adapting
     this.emit('graphics', g, prev);
   }
 
@@ -236,7 +239,10 @@ export class World extends Emitter {
     }
     this.buildings.update(dt);
     this._frames++;
-    this.vegetation.updateLod(this.rig.camera.position);
+    this.rig.camera.updateMatrixWorld();
+    this._pv.multiplyMatrices(this.rig.camera.projectionMatrix, this.rig.camera.matrixWorldInverse);
+    this._frustum.setFromProjectionMatrix(this._pv);
+    this.vegetation.updateLod(this.rig.camera.position, this._frustum);
     for (const st of Object.values(this.buildings.sets)) st.updateLod?.(this.rig.camera.position);
     windUniforms.uWind.value = this.gfx.foliageQuality > 0 ? this.wind : 0;
     this.scene.fog.density = this.env.fogDensityBase ?? 0.0014;

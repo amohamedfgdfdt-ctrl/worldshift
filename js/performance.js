@@ -20,6 +20,7 @@ export class PerformanceMonitor {
     this.renderMs = 0;
     this.gpuMs = null;
     this.dynamicRes = true;
+    this.minScale = world.caps?.touch || (typeof matchMedia !== 'undefined' && matchMedia('(pointer:coarse)').matches) ? 0.5 : 0.6;   // phones may go lower before Auto drops a preset
     this._fpsTimer = 0; this._fpsFrames = 0; this._worst = 0;
     this._slow = 0; this._fast = 0; this._cool = 0;
     this.autoLevel = null;                // preset index used by Auto mode
@@ -84,7 +85,7 @@ export class PerformanceMonitor {
     this.hist[this.n % HIST] = ms;
     this.histRender[this.n % HIST] = this.world.renderMs || 0;
     this.n++;
-    this.ema += (ms - this.ema) * 0.08;
+    this.ema += (Math.min(ms, (1000 / Math.max(20, this.targetFps)) * 3) - this.ema) * 0.08;
     this.renderMs += ((this.world.renderMs || 0) - this.renderMs) * 0.1;
     this._worst = Math.max(this._worst, ms);
     this._fpsFrames++; this._fpsTimer += dt;
@@ -98,37 +99,50 @@ export class PerformanceMonitor {
     this._adapt(dt, ms);
   }
 
+  /**
+   * Adaptive quality. Resolution is adjusted in discrete 5 % steps by a
+   * proportional rule (the further over budget, the bigger the step, but never
+   * more than 15 % at once) so changes are rare and small instead of constant.
+   * One-off stalls (shader compile, tab switch, asset load) are ignored: the
+   * controller only reacts to a sustained overrun, and is frozen for a couple
+   * of seconds after any settings change.
+   */
   _adapt(dt) {
     const g = this.gfx, w = this.world;
     if (this._cool > 0) { this._cool -= dt; return; }
     const target = 1000 / Math.max(20, this.targetFps);
     const slow = this.ema > target * 1.28;
-    const fast = this.ema < target * 1.12;
+    const fast = this.ema < target * 0.88;
     if (slow) { this._slow += dt; this._fast = 0; } else if (fast) { this._fast += dt; this._slow = 0; } else { this._slow = 0; this._fast = 0; }
     const dynamic = this.dynamicRes || g.auto;
-    if (!dynamic && !g.auto) return;
+    if (!dynamic) return;
+    const floor = this.minScale ?? 0.6;
 
-    if (this._slow > 1.6) {
+    if (this._slow > 2.0) {
       this._slow = 0;
-      if (dynamic && w.drsScale > 0.58) {
-        w.setDynamicScale(w.drsScale - 0.1);
-        this._cool = 0.8; this.ema = target;
-        this._log(`Resolution ${Math.round(w.pixelRatio() / Math.min(devicePixelRatio || 1, 2) * 100)}%`);
+      if (dynamic && w.drsScale > floor + 1e-3) {
+        const want = w.drsScale * Math.max(0.85, Math.min(0.95, Math.sqrt(target / this.ema)));
+        const next = Math.max(floor, Math.floor(want * 20) / 20);   // snap down to a 5 % step
+        w.setDynamicScale(Math.min(next, w.drsScale - 0.05));
+        this._cool = 1.5; this.ema = target;
+        this._log(`Resolution ${Math.round(w.drsScale * 100)}% of the chosen scale`);
       } else if (g.auto) {
         const lvl = this.autoLevel ?? PRESET_ORDER.indexOf(g.preset === 'custom' ? 'medium' : g.preset);
         if (lvl > 0) {
           this._stepTo(lvl - 1, 'lowered');
-          this._cool = 3; this.ema = target;
+          // quality dropped, so give the resolution back
+          if (w.drsScale < 1) w.setDynamicScale(Math.min(1, w.drsScale + 0.15));
+          this._cool = 4; this.ema = target;
         }
       }
-    } else if (this._fast > 5) {
+    } else if (this._fast > 6) {
       this._fast = 0;
       if (w.drsScale < 1) {
         w.setDynamicScale(w.drsScale + 0.05);
-        this._cool = 0.8;
+        this._cool = 1.5;
       } else if (g.auto && this.autoLevel != null && this.autoLevel < this.autoCeiling && this._upOk()) {
         this._stepTo(this.autoLevel + 1, 'restored');
-        this._cool = 6;
+        this._cool = 8;
       }
     }
   }

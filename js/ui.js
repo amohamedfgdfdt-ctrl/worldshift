@@ -1,8 +1,8 @@
 // DOM user interface: top bar, category rail, flyout panels, info panel,
 // camera buttons, simulation bar, action bar, toasts and dialogs.
 import { icon } from './icons.js';
-import { getLang, setLang } from './i18n.js';
 import { CATEGORIES, TYPES, typesOf } from './buildings.js';
+import { t as tr, i18n } from './i18n.js';
 import { formatClock } from './utils.js';
 import { DEFAULT_SEED, CELL, N, VERTS, isTouchDevice } from './config.js';
 import { windUniforms } from './vegetation.js';
@@ -33,8 +33,7 @@ export class UI {
     $('#btn-settings').innerHTML = icon('gear', 20);
     $('#btn-gfx').innerHTML = icon('sparkle', 20);
 
-    this.el.rail.innerHTML = CATEGORIES.map((c) =>
-      `<button class="rail-btn" data-cat="${c.id}" title="${c.label}">${icon(c.icon, 22)}<span>${c.label.replace(' Tools', '').replace('World Settings', 'World')}</span></button>`).join('');
+    this._renderRail();
 
     const touch = isTouchDevice;
     this.el.cam.innerHTML = `
@@ -148,6 +147,15 @@ export class UI {
     this.refreshSim(); this.refreshStats(); this.refreshAction();
   }
 
+  _renderRail() {
+    this.el.rail.innerHTML = CATEGORIES.map((c) => {
+      const lab = tr('cat.' + c.id);
+      return `<button class="rail-btn ${this.cat === c.id ? 'active' : ''}" data-cat="${c.id}" title="${lab}">${icon(c.icon, 22)}<span>${i18n.lang === 'en' ? lab.replace(' Tools', '').replace('World Settings', 'World') : lab.replace('أدوات ', '').replace('إعدادات ', '')}</span></button>`;
+    }).join('');
+  }
+  /** Re-render the language-dependent parts (called when the language or mode changes). */
+  rebuildLang() { this._renderRail(); if (this.cat) this.renderPanel(); if (this.tools.selection) this.renderInfo(this.tools.selection); }
+
   // ------------------------------------------------------------ panels
   toggleCategory(id) {
     if (this.cat === id && !this.el.panel.classList.contains('closed')) return this.closePanel();
@@ -175,9 +183,14 @@ export class UI {
   }
 
   _card(t) {
-    const meta = t.special ? 'Roads' : `${t.w}×${t.d}${t.capacity && t.kind === 'house' ? ` · ${t.capacity} residents` : t.jobs ? ` · ${t.jobs} jobs` : ''}`;
-    return `<button class="card" data-tool="${t.special || 'build'}" data-key="${t.key}">
-      <div class="cicon">${icon(t.icon, 20)}</div><div class="cname">${t.name}</div><div class="cmeta">${meta}</div></button>`;
+    const nm = tr('b.' + t.key);
+    const meta = t.special ? (i18n.lang === 'ar' ? 'طرق' : 'Roads') : `${t.w}×${t.d}${t.capacity && t.kind === 'house' ? ` · ${t.capacity} ${tr('unit.res')}` : t.jobs ? ` · ${t.jobs} ${tr('unit.jobs')}` : ''}`;
+    const g = this.gameMode?.campaign.gate;               // Campaign: lock + cost badges
+    const locked = !!g && g.isLocked(t.key) && t.key !== 'road';
+    const cost = g ? this.sim.economy.costOf(t.key) : 0;
+    const poor = g && !locked && cost > 0 && !this.sim.economy.canAfford(cost);
+    return `<button class="card ${locked ? 'locked' : ''} ${poor ? 'noafford' : ''}" data-tool="${t.special || 'build'}" data-key="${t.key}">
+      <div class="cicon">${icon(t.icon, 20)}</div><div class="cname">${nm}</div><div class="cmeta">${meta}</div>${locked ? `<span class="lock">${icon('lock', 14)}</span>` : cost ? `<span class="cost">${i18n.num(cost)}</span>` : ''}</button>`;
   }
 
   _slider(key, label, min, max, step, value, fmt) {
@@ -217,9 +230,7 @@ export class UI {
     } else if (cat.id === 'world') {
       const s = this.settings.get();
       body = `
-        <div class="section" style="margin-top:0"><h4>Language</h4>
-          <div class="seg" id="seg-lang"><button data-lang="ar" class="${getLang() === 'ar' ? 'on' : ''}">العربية</button><button data-lang="en" class="${getLang() === 'en' ? 'on' : ''}">English</button></div></div>
-        <div class="section"><h4>Time & atmosphere</h4>
+        <div class="section" style="margin-top:0"><h4>Time & atmosphere</h4>
           ${this._slider('hour', 'Time of day', 0, 24, 0.25, this.sim.hour, (v) => formatClock(v * 60))}
           ${this._switch('dayCycle', 'Day / night cycle', this.sim.dayCycle)}
           ${this._slider('wind', 'Wind', 0, 1.6, 0.05, s.wind, (v) => (+v).toFixed(2))}
@@ -246,7 +257,7 @@ export class UI {
           <p class="help">Drag: rotate · Right-drag / Shift+drag: move · Wheel: zoom · WASD/arrows: move · Q/E: turn · R: rotate building · Esc: cancel · Space: play/pause. On touch: one finger rotates or moves (button on the right), two fingers pinch, move and twist.</p>
         </div>`;
     }
-    this.el.panel.innerHTML = `<div class="panel-title"><span>${cat.label}</span><button class="close" data-act="close-panel" aria-label="Close">${icon('x', 16)}</button></div>${body}`;
+    this.el.panel.innerHTML = `<div class="panel-title"><span>${tr('cat.' + cat.id)}</span><button class="close" data-act="close-panel" aria-label="Close">${icon('x', 16)}</button></div>${body}`;
     for (const r of this.el.panel.querySelectorAll('input[type=range]')) r.style.setProperty('--fill', this._fill(r));
     this.refreshSelectionState();
     this._refreshSaveInfo();
@@ -284,8 +295,6 @@ export class UI {
       }
       return;
     }
-    const lg = e.target.closest('[data-lang]');
-    if (lg) { setLang(lg.dataset.lang); return; }
     const a = e.target.closest('[data-act]');
     if (!a) return;
     switch (a.dataset.act) {
@@ -296,11 +305,11 @@ export class UI {
       case 'load':
         this.confirm({ title: 'Load saved world?', text: 'Your current world will be replaced by the last saved one.', ok: 'Load' }).then((ok) => { if (ok) this.save.load(); });
         break;
-      case 'new': this.newWorldDialog(); break;
+      case 'new': if (this.gameMode?.inCampaign) { this.toast(tr('mode.campaign') + ': ' + tr('cost.locked'), 'warn'); break; } this.newWorldDialog(); break;
       case 'reset-water':
         this.confirm({ title: 'Reset the water?', text: 'All water returns to the lake and river of the starting world. Buildings stay.', ok: 'Reset water' }).then((ok) => { if (ok) { world.water.resetToInitial(); this.toast('Water reset', 'ok'); this.save.markDirty(); } });
         break;
-      case 'clear-water': world.water.clearAll(); this.toast('All water removed', 'ok'); this.save.markDirty(); break;
+      case 'clear-water': if (this.gameMode?.inCampaign) { this.toast(tr('cost.locked'), 'warn'); break; } world.water.clearAll(); this.toast('All water removed', 'ok'); this.save.markDirty(); break;
     }
   }
 
@@ -339,13 +348,13 @@ export class UI {
     if (sel.kind === 'building') {
       const b = bs.buildings.get(sel.id); if (!b) return;
       const t = TYPES[b.key];
-      ic = t.icon; title = t.name; sub = CATEGORIES.find((c) => c.id === t.category).label; desc = t.desc; del = true;
+      ic = t.icon; title = tr('b.' + t.key); sub = tr('cat.' + t.category); desc = tr('bd.' + t.key); del = true;
     } else if (sel.kind === 'road') { ic = 'road'; title = 'Road segment'; sub = 'Infrastructure'; desc = 'A paved tile that follows the ground.'; del = true; }
     else if (sel.kind === 'source') {
       const s = this.world.water.getSource(sel.id); if (!s) return;
       ic = 'source'; title = 'Water source'; sub = 'Water tools'; desc = 'Adds water to the world at a steady rate while sources are flowing.'; del = true;
       extra = `<div class="stack"><div class="top"><label>Strength</label><span class="val" id="src-rate-v">${s.rate.toFixed(1)} m³/s</span></div>
-        <input type="range" data-src-rate="1" min="1" max="30" step="0.5" value="${s.rate}"></div>`;
+        <input type="range" data-src-rate="1" min="1" max="${this.gameMode?.campaign.gate ? 10 : 30}" step="0.5" value="${s.rate}"></div>`;
     } else if (sel.kind === 'water') { ic = 'wave'; title = 'Water'; sub = 'Terrain'; desc = 'Flows downhill and collects in low ground.'; }
     else { ic = 'globe'; title = 'Terrain'; sub = 'World'; desc = 'Natural ground.'; }
     el.innerHTML = `<div class="info-head"><div class="cicon">${icon(ic, 20)}</div><div><small>${sub}</small><h3>${title}</h3></div><button class="x" data-info="close" aria-label="Close">${icon('x', 16)}</button></div>
@@ -375,6 +384,7 @@ export class UI {
         const st = s ? s.stored : 0;
         h += kv('Stored water', `${Math.round(st).toLocaleString()} / ${t.capacity.toLocaleString()} m³`, st > 0 ? 'good' : '');
       }
+      if (t.kind === 'power') { const o = this.sim.economy.s; h += kv(tr('hud.energy'), t.key === 'solar_plant' ? `${Math.round((o.solar || 0) / Math.max(1, o.counts.solar_plant || 1))} / 45` : `${Math.round((o.wind || 0) / Math.max(1, o.counts.wind_turbine || 1))} / 38`, 'good'); }
       if (t.kind === 'farm') { const ir = bs.irrigation(b); h += kv('Irrigation', ir.label, ir.label === 'None nearby' ? 'warn' : 'good'); }
       if (t.solid !== false) { const fl = bs.floodInfo(b); h += kv('Flood status', fl.label, fl.depth > 0.5 ? 'bad' : fl.depth > 0.03 ? 'warn' : 'good'); }
       h += kv('Cell', `${b.cx}, ${b.cz}`);
