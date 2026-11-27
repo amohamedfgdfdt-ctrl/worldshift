@@ -20,7 +20,7 @@ const PAL = {
   sand: srgb(0.74, 0.68, 0.50),
   dirt: srgb(0.40, 0.32, 0.22),
   rock: srgb(0.47, 0.45, 0.43),
-  rockDark: srgb(0.30, 0.29, 0.29),
+  rockDark: srgb(0.38, 0.36, 0.35),
   snow: srgb(0.93, 0.95, 0.98),
 };
 
@@ -38,16 +38,17 @@ export class HeightField {
     const nA = new Noise2D(this.seed + 11);
     const nB = new Noise2D(this.seed * 3 + 101);
     const nC = new Noise2D(this.seed * 7 + 977);
+    const nD = new Noise2D(this.seed * 13 + 37);   // river bank irregularity
     this.noiseColor = new Noise2D(this.seed + 4242);
 
     // ---- layout parameters (seeded variations of the same overall design)
     const lakeU = 0.5 + (rng() - 0.5) * 0.22;
     const lakeV = 0.57 + (rng() - 0.5) * 0.1;
     const lakeR = 0.078 + rng() * 0.016;
-    const ph1 = rng() * 6.28, ph2 = rng() * 6.28;
+    const ph1 = rng() * 6.28, ph2 = rng() * 6.28, ph3 = rng() * 6.28;
     const amp = 0.09 + rng() * 0.05;
 
-    const u0 = (v) => 0.5 + amp * Math.sin(v * 5.4 + ph1) + 0.04 * Math.sin(v * 12.7 + ph2);
+    const u0 = (v) => 0.5 + amp * Math.sin(v * 5.4 + ph1) + 0.04 * Math.sin(v * 12.7 + ph2) + 0.026 * Math.sin(v * 23.7 + ph3);
     const riverU = (v) => {
       const corr = (lakeU - u0(lakeV)) * Math.exp(-Math.pow((v - lakeV) / 0.2, 2));
       return clamp(u0(v) + corr, 0.22, 0.78);
@@ -98,12 +99,18 @@ export class HeightField {
       bed[k] = k === 0 ? raw : Math.min(raw, bed[k - 1] - 0.004);
       bed[k] = Math.max(0.5, bed[k]);
     }
+    // rapids reach: a short, steeper stepped descent where the river leaves the
+    // mountains through the southern gorge, so whitewater forms where the terrain supports it
+    const kR = Math.round(0.8 * (S - 1));
+    for (let k = kR; k < Math.min(S, kR + 20); k++) bed[k] = Math.max(0.4, Math.min(bed[k], bed[kR - 1] - 0.085 * (k - kR + 1)));
+    for (let k = kR + 20; k < S; k++) bed[k] = Math.max(0.5, Math.min(bed[k], bed[k - 1] - 0.004));
     const bedAt = (v) => {
       const f = clamp(v, 0, 1) * (S - 1);
       const k = Math.min(S - 2, Math.floor(f));
       return lerp(bed[k], bed[k + 1], f - k);
     };
-    const halfW = (v) => 8.5 + 3.5 * v; // metres
+    // channel width wanders along the course, like a real stream
+    const halfW = (v) => (8.5 + 3.5 * v) * (0.86 + 0.30 * nD.noise(v * 5.3 + 2.1, 7.7));
 
     // ---- lake + river carving
     const lakeFloor = 0.9;
@@ -125,8 +132,11 @@ export class HeightField {
           if (target < t) t = target;
         }
         const lat = Math.abs(u - ru) * SIZE;
-        if (lat < hw * 4) {
-          const target = bd + 4.2 * Math.pow(lat / hw, 2.2);
+        // noisy bank line: irregular edges and varied bank steepness instead of a machined channel
+        const latN = lat / hw + nD.noise(u * 6.3 + 13, v * 6.3 + 5) * 0.42 + nD.noise(u * 15.1 + 3, v * 15.1 + 21) * 0.16;
+        if (latN < 4) {
+          const steep = 3.3 + 1.9 * (nD.noise(u * 2.9 + 8, v * 2.9 + 16) * 0.5 + 0.5);
+          const target = bd + steep * Math.pow(Math.max(latN, 0), 2.2);
           if (target < t) t = target;
         }
         h[j * VERTS + i] = Math.max(0.2, t);
@@ -164,7 +174,8 @@ export class HeightField {
         const d = lakeShape(u, v);
         if (d < 1.4) depth = Math.max(depth, lakeLevel - th);
         const lat = Math.abs(u - ru) * SIZE;
-        if (lat < hw * 1.3) depth = Math.max(depth, bd + 0.75 - th);
+        const latN = lat / hw + nD.noise(u * 6.3 + 13, v * 6.3 + 5) * 0.42 + nD.noise(u * 15.1 + 3, v * 15.1 + 21) * 0.16;
+        if (latN < 1.3) depth = Math.max(depth, bd + 0.75 - th);
         w[idx] = depth > 0.02 ? depth : 0;
       }
     }
@@ -410,8 +421,10 @@ if (uGrid > 0.001) {
   _buildSkirt() {
     const rows = 7, bottom = -9;
     const verts = [], cols = [], nors = [], idx = [];
-    const strata = [srgb(0.33, 0.25, 0.17), srgb(0.30, 0.22, 0.15), srgb(0.38, 0.30, 0.2), srgb(0.26, 0.2, 0.14),
-      srgb(0.3, 0.24, 0.17), srgb(0.2, 0.16, 0.12), srgb(0.14, 0.11, 0.09)];
+    // mountain-base rock tones (not near-black): wherever the skirt still peeks
+    // past the boundary ring at grazing angles it reads as mountainside, not void
+    const strata = [srgb(0.42, 0.38, 0.33), srgb(0.38, 0.34, 0.29), srgb(0.45, 0.40, 0.34), srgb(0.36, 0.32, 0.28),
+      srgb(0.40, 0.36, 0.30), srgb(0.33, 0.30, 0.26), srgb(0.28, 0.26, 0.23)];
     this._skirtMeta = { rows, bottom, strata };
     const g = new THREE.BufferGeometry();
     const edges = [
@@ -443,7 +456,7 @@ if (uGrid > 0.001) {
     g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cols), 3));
     g.setIndex(idx);
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), SIZE);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+    const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(g, mat);
     mesh.receiveShadow = true;
     return mesh;

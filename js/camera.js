@@ -3,13 +3,14 @@ import * as THREE from '../vendor/three.module.min.js';
 import { HALF } from './config.js';
 import { clamp } from './utils.js';
 
-const MIN_DIST = 16, MAX_DIST = 520;
+const MIN_DIST = 16, MAX_DIST = 400;   // capped so the boundary mountains always fill the horizon
 const MIN_PITCH = 0.14, MAX_PITCH = 1.5;
 
 export class CameraRig {
   constructor(aspect, field) {
     this.field = field;
-    this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 3200);
+    this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 4200);
+    this.groundAt = null;   // optional world-space ground query (terrain + boundary ring), set by World
     this.goal = { target: new THREE.Vector3(), yaw: 0, pitch: 0.7, dist: 220 };
     this.cur = { target: new THREE.Vector3(), yaw: 0, pitch: 0.7, dist: 220 };
     this.raycaster = new THREE.Raycaster();
@@ -104,8 +105,9 @@ export class CameraRig {
       c.target.y + Math.sin(c.pitch) * c.dist,
       c.target.z + Math.cos(c.yaw) * cp * c.dist,
     );
-    const ground = this.field.heightAt(
-      clamp(cam.position.x, -HALF, HALF), clamp(cam.position.z, -HALF, HALF)) + 3.5;
+    const gx = clamp(cam.position.x, -HALF, HALF), gz = clamp(cam.position.z, -HALF, HALF);
+    const ground = (this.groundAt ? this.groundAt(cam.position.x, cam.position.z)
+      : this.field.heightAt(gx, gz)) + 3.5;
     if (cam.position.y < ground) cam.position.y = ground;
     cam.lookAt(c.target);
     cam.updateMatrixWorld();

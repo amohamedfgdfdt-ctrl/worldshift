@@ -408,7 +408,7 @@ void main() {
     spec = uSunColor * (pow(sunAmt, 900.0) * 6.0 + pow(sunAmt, 60.0) * 0.35) * smoothstep(-0.02, 0.15, uSunDir.y);
   }
 
-  float k = exp(-dep * 0.5);
+  float k = exp(-dep * 0.8);
   vec3 body = mix(uDeep, uShallow, k) * uLight;
   float diff = 0.55 + 0.45 * max(dot(N, uSunDir), 0.0);
   body *= diff;

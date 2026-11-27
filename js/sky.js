@@ -42,7 +42,7 @@ void main() {
   }
 
   float md = max(dot(d, -uSunDir), 0.0);
-  col += vec3(0.85, 0.9, 1.0) * smoothstep(0.9993, 0.9997, md) * uNight * 2.5 + vec3(0.3, 0.38, 0.6) * pow(md, 80.0) * uNight * 0.35;
+  col += vec3(0.85, 0.9, 1.0) * smoothstep(0.9993, 0.9997, md) * uNight * 3.0 + vec3(0.34, 0.44, 0.68) * pow(md, 60.0) * uNight * 0.5;
   float sd = max(dot(d, uSunDir), 0.0);
   col += uSunColor * (pow(sd, 2000.0) * 40.0 + pow(sd, 45.0) * 0.35 + pow(sd, 6.0) * 0.10);
 
@@ -165,10 +165,11 @@ export class Environment {
     // lights
     const moon = e < -0.03;
     const sunI = 3.6 * smoothstep(-0.04, 0.3, e);
-    const moonI = 1.5 * smoothstep(0.0, -0.3, e);
+    // brighter, cooler moonlight so terrain, trees, buildings and water stay readable
+    const moonI = 2.1 * smoothstep(0.0, -0.32, e);
     const L = this.sun;
     if (moon) {
-      L.color.setRGB(0.55, 0.65, 0.95);
+      L.color.setRGB(0.6, 0.7, 1.0);
       L.intensity = moonI;
     } else {
       L.color.copy(sunColor);
@@ -177,9 +178,13 @@ export class Environment {
     const dir = moon ? this.sunDir.clone().negate() : this.sunDir;
     this.lightDir = dir;
 
+    const nightAmt = 1 - dayAmt;
     this.hemi.color.copy(zenith).lerp(new THREE.Color(1, 1, 1), 0.35);
+    // subtle blue-toned ambient at night: shadowed slopes stay readable, never pitch black
+    this.hemi.color.lerp(new THREE.Color(0.38, 0.48, 0.78), nightAmt * 0.55);
     this.hemi.groundColor.setRGB(0.20, 0.17, 0.12).multiplyScalar(0.4 + 0.6 * dayAmt);
-    this.hemi.intensity = lerp(0.55, 1.05, dayAmt);
+    this.hemi.groundColor.lerp(new THREE.Color(0.10, 0.12, 0.22), nightAmt * 0.7);
+    this.hemi.intensity = lerp(0.85, 1.05, dayAmt);
 
     // fog follows horizon colour
     this.scene.fog.color.copy(horizon).lerp(new THREE.Color(0.5, 0.6, 0.75), 0.15 * dayAmt);
@@ -197,7 +202,8 @@ export class Environment {
     L.target.position.copy(snapped);
     L.target.updateMatrixWorld();
 
-    Object.assign(this.state, { dayAmt, elevation: e, lightAmt: lerp(0.12, 1, dayAmt) });
+    const moonAmt = moon ? smoothstep(0.0, -0.32, e) : 0;
+    Object.assign(this.state, { dayAmt, nightAmt, moonAmt, elevation: e, lightAmt: lerp(0.12, 1, dayAmt) });
     this.state.horizon.copy(horizon); this.state.zenith.copy(zenith); this.state.sunColor.copy(sunColor);
     return this.state;
   }
@@ -206,12 +212,18 @@ export class Environment {
 
   applyToWater(wu) {
     const s = this.state;
-    wu.uSunDir.value.copy(this.sunDir);
-    wu.uSunColor.value.copy(s.sunColor).multiplyScalar(s.dayAmt);
+    // at night the moon is the specular source: use the active light direction
+    wu.uSunDir.value.copy(this.lightDir ?? this.sunDir);
+    if (s.moonAmt > 0) {
+      // subtle cool moon glint on lakes and rivers
+      wu.uSunColor.value.setRGB(0.62, 0.74, 1.0).multiplyScalar(0.85 * s.moonAmt);
+    } else {
+      wu.uSunColor.value.copy(s.sunColor).multiplyScalar(s.dayAmt);
+    }
     wu.uHorizon.value.copy(s.horizon);
     wu.uZenith.value.copy(s.zenith);
     wu.uFogColor.value.copy(this.scene.fog.color);
     wu.uFogDensity.value = this.scene.fog.density;
-    wu.uLight.value = lerp(0.3, 1, s.dayAmt);
+    wu.uLight.value = lerp(0.45, 1, s.dayAmt);
   }
 }

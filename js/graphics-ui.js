@@ -1,10 +1,11 @@
 // Graphics Settings page (modal). Generated from the schema in graphics.js, so
 // every control maps to a key that the render systems actually read.
 import { SCHEMA, KEYS, PRESETS, PRESET_ORDER } from './graphics.js';
+import { t as tr, i18n } from './i18n.js';
 import { runBenchmark } from './performance.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const CAP_NOTE = { float: 'Needs float render targets (not available here).', tex4096: 'Needs 4096 px textures (not available here).' };
+const CAP_NOTE = { float: 'gfx.cap.float', tex4096: 'gfx.cap.tex4096' };
 
 export class GraphicsUI {
   constructor({ ui, world, gfx, perf, caps, onApplied }) {
@@ -21,14 +22,14 @@ export class GraphicsUI {
     this.snapshot = { values: { ...gfx.values }, preset: gfx.preset, auto: gfx.auto, dyn: this.perf.dynamicRes };
     const bg = document.createElement('div');
     bg.className = 'modal-bg gfx-bg';
-    bg.innerHTML = `<div class="modal gfx" role="dialog" aria-modal="true" aria-label="Graphics settings">
-      <div class="gfx-head"><div><h3>Graphics</h3><p class="gfx-sub" id="gfx-sub"></p></div>
-        <button class="close" data-g="cancel" aria-label="Close">✕</button></div>
+    bg.innerHTML = `<div class="modal gfx" role="dialog" aria-modal="true" aria-label="${tr('gfx.title')}">
+      <div class="gfx-head"><div><h3>${tr('gfx.title')}</h3><p class="gfx-sub" id="gfx-sub"></p></div>
+        <button class="close" data-g="cancel" aria-label="${tr('ui.close')}">✕</button></div>
       <div class="gfx-scroll">
         <div class="gfx-top">
-          <div class="seg" id="gfx-presets">${PRESET_ORDER.map((p) => `<button data-preset="${p}">${p[0].toUpperCase() + p.slice(1)}</button>`).join('')}<button data-preset="custom" disabled>Custom</button></div>
-          <div class="gfx-row"><div><b>Auto Graphics Mode</b><span>Lowers quality when the frame rate drops and restores it when stable.</span></div><button class="switch" role="switch" id="gfx-auto" aria-checked="false"></button></div>
-          <div class="gfx-row"><div><b>Dynamic resolution</b><span>Scales the render resolution to hold the target frame rate.</span></div><button class="switch" role="switch" id="gfx-dyn" aria-checked="true"></button></div>
+          <div class="seg" id="gfx-presets">${PRESET_ORDER.map((p) => `<button data-preset="${p}">${tr('gfx.p.' + p)}</button>`).join('')}<button data-preset="custom" disabled>${tr('gfx.custom')}</button></div>
+          <div class="gfx-row"><div><b>${tr('gfx.auto')}</b><span>${tr('gfx.auto.d')}</span></div><button class="switch" role="switch" id="gfx-auto" aria-checked="false"></button></div>
+          <div class="gfx-row"><div><b>${tr('gfx.dyn')}</b><span>${tr('gfx.dyn.d')}</span></div><button class="switch" role="switch" id="gfx-dyn" aria-checked="true"></button></div>
           <div class="gfx-suggest" id="gfx-suggest" hidden></div>
         </div>
         <div class="gfx-live">
@@ -36,16 +37,16 @@ export class GraphicsUI {
           <canvas id="gfx-graph" width="360" height="56"></canvas>
           <div class="gfx-events" id="gfx-events"></div>
         </div>
-        ${SCHEMA.map((g) => `<div class="section"><h4>${g.group}</h4>${g.items.map((it) => this._row(it)).join('')}</div>`).join('')}
-        <div class="section"><h4>This device</h4><div class="gfx-caps" id="gfx-caps"></div>
-          <p class="help">Capabilities come from the browser's WebGL API. The renderer string is shown only to detect software rendering; the device model is never used.</p></div>
+        ${SCHEMA.map((g) => `<div class="section"><h4>${tr('gfx.g.' + g.group)}</h4>${g.items.map((it) => this._row(it)).join('')}</div>`).join('')}
+        <div class="section"><h4>${tr('gfx.device')}</h4><div class="gfx-caps" id="gfx-caps"></div>
+          <p class="help">${tr('gfx.device.d')}</p></div>
       </div>
       <div class="gfx-foot">
-        <button class="btn" data-g="defaults">Restore Defaults</button>
-        <button class="btn" data-g="detect" id="gfx-detect">Auto Detect</button>
+        <button class="btn" data-g="defaults">${tr('gfx.defaults')}</button>
+        <button class="btn" data-g="detect" id="gfx-detect">${tr('gfx.detect')}</button>
         <span style="flex:1"></span>
-        <button class="btn" data-g="cancel">Cancel</button>
-        <button class="btn primary" data-g="apply">Apply Settings</button>
+        <button class="btn" data-g="cancel">${tr('cancel')}</button>
+        <button class="btn primary" data-g="apply">${tr('gfx.apply')}</button>
       </div></div>`;
     this.root = bg;
     this.ui.el.modal.appendChild(bg);
@@ -59,15 +60,15 @@ export class GraphicsUI {
 
   _row(it) {
     const ok = this.gfx.supported(it.key);
-    const note = !ok ? `<span class="gfx-na">${esc(CAP_NOTE[it.needs] || 'Not supported on this device.')}</span>` : '';
-    const hint = it.hint ? `<span class="gfx-hint">${esc(it.hint)}</span>` : '';
+    const note = !ok ? `<span class="gfx-na">${esc(tr(CAP_NOTE[it.needs] || 'gfx.na'))}</span>` : '';
+    const hint = it.hint ? `<span class="gfx-hint">${esc(tr('gfx.h.' + it.key))}</span>` : '';
     let ctl;
     if (it.type === 'select') {
       ctl = `<select data-key="${it.key}" ${ok ? '' : 'disabled'}>${it.options.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select>`;
     } else {
       ctl = `<div class="gfx-range"><input type="range" data-key="${it.key}" min="${it.min}" max="${it.max}" step="${it.step}" ${ok ? '' : 'disabled'}><b data-val="${it.key}"></b></div>`;
     }
-    return `<div class="gfx-item ${ok ? '' : 'na'}" data-item="${it.key}"><div class="gfx-lab"><label>${esc(it.label)}</label>${hint}${note}</div>${ctl}</div>`;
+    return `<div class="gfx-item ${ok ? '' : 'na'}" data-item="${it.key}"><div class="gfx-lab"><label>${esc(tr('gfx.l.' + it.key))}</label>${hint}${note}</div>${ctl}</div>`;
   }
 
   _wire(bg) {
@@ -129,30 +130,30 @@ export class GraphicsUI {
     this._sub();
     const c = this.caps;
     root.querySelector('#gfx-caps').innerHTML = [
-      ['WebGL', c.webgl2 ? '2' : '1'], ['Max texture', c.maxTexture + ' px'], ['Anisotropy', '×' + c.maxAniso], ['MSAA samples', c.maxSamples || 'none'],
-      ['Float targets', c.float ? 'yes' : 'no'], ['GPU timer', c.timer ? 'yes' : 'no'], ['Screen', `${c.screenW}×${c.screenH} @${c.dpr.toFixed(2)}×`],
-      ['Refresh rate', `≈${Math.round(this.gfx.refreshHz)} Hz (measured)`], ['Renderer', c.software ? 'software (no GPU)' : 'hardware'],
+      ['WebGL', c.webgl2 ? '2' : '1'], [tr('gfx.k.maxtex'), c.maxTexture + ' px'], [tr('gfx.k.aniso'), '×' + c.maxAniso], [tr('gfx.k.msaa'), c.maxSamples || '—'],
+      [tr('gfx.k.float'), c.float ? tr('yes') : '—'], [tr('gfx.k.timer'), c.timer ? tr('yes') : '—'], [tr('gfx.k.screen'), `${c.screenW}×${c.screenH} @${c.dpr.toFixed(2)}×`],
+      [tr('gfx.k.refresh'), `≈${Math.round(this.gfx.refreshHz)} Hz`], [tr('gfx.k.renderer'), tr(c.software ? 'gfx.k.soft' : 'gfx.k.hard')],
     ].map(([a, b]) => `<div class="kv"><span>${a}</span><b>${b}</b></div>`).join('');
   }
 
   _sub() {
     const el = this.root?.querySelector('#gfx-sub'); if (!el) return;
-    el.textContent = `Preset: ${this.gfx.preset}${this.gfx.auto ? ' · Auto mode on' : ''} — changes preview live; Apply keeps them.`;
+    el.textContent = tr('gfx.sub', { p: tr('gfx.p.' + this.gfx.preset) === ('gfx.p.' + this.gfx.preset) ? this.gfx.preset : tr('gfx.p.' + this.gfx.preset), auto: this.gfx.auto ? tr('gfx.sub.auto') : '' });
   }
 
   _showSuggestion(s, firstRun) {
     const el = this.root.querySelector('#gfx-suggest');
     el.hidden = false;
-    el.innerHTML = `<b>${firstRun ? 'Suggested for this device' : 'Detected'}: ${s.preset[0].toUpperCase() + s.preset.slice(1)}</b><span>${s.notes.map(esc).join(' ')}</span>`;
+    el.innerHTML = `<b>${tr(firstRun ? 'gfx.suggested' : 'gfx.detected')}: ${tr('gfx.p.' + s.preset)}</b><span>${s.notes.map(esc).join(' ')}</span>`;
   }
 
   _tick() {
     const root = this.root; if (!root) return;
     const p = this.perf;
     root.querySelector('#gfx-stats').innerHTML = [
-      ['FPS', p.fps.toFixed(0)], ['Frame', p.frameMs.toFixed(1) + ' ms'], ['Worst', p.worstMs.toFixed(0) + ' ms'],
-      ['Render (CPU)', p.renderMs.toFixed(1) + ' ms'], ['GPU', p.gpuMs == null ? 'n/a' : p.gpuMs.toFixed(1) + ' ms'],
-      ['Resolution', Math.round(this.world.pixelRatio() / Math.min(devicePixelRatio || 1, 2) * 100) + '%'], ['Target', p.targetFps + ' FPS'],
+      ['FPS', p.fps.toFixed(0)], [tr('gfx.s.frame'), p.frameMs.toFixed(1) + ' ms'], [tr('gfx.s.worst'), p.worstMs.toFixed(0) + ' ms'],
+      [tr('gfx.s.render'), p.renderMs.toFixed(1) + ' ms'], ['GPU', p.gpuMs == null ? 'n/a' : p.gpuMs.toFixed(1) + ' ms'],
+      [tr('gfx.s.res'), Math.round(this.world.pixelRatio() / Math.min(devicePixelRatio || 1, 2) * 100) + '%'], [tr('gfx.s.target'), p.targetFps + ' FPS'],
     ].map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join('');
     p.drawGraph(root.querySelector('#gfx-graph'));
     this._renderEvents();
@@ -171,9 +172,9 @@ export class GraphicsUI {
       this.refresh();
     } else if (act === 'detect') {
       const btn = this.root.querySelector('#gfx-detect');
-      btn.disabled = true; btn.textContent = 'Testing…';
+      btn.disabled = true; btn.textContent = tr('gfx.testing');
       const rec = await this.detect();
-      btn.disabled = false; btn.textContent = 'Auto Detect';
+      btn.disabled = false; btn.textContent = tr('gfx.detect');
       if (!this.root) return;
       gfx.setPreset(rec.preset);
       this.perf.autoLevel = PRESET_ORDER.indexOf(rec.preset); this.perf.autoCeiling = this.perf.autoLevel;

@@ -42,6 +42,7 @@ export class GameMode {
     if (this.mode === 'sandbox' && this.save.slot === 'sandbox') this.save.save(true);   // flush the sandbox world first
     this.save.useSlot('campaign');
     this.mode = 'campaign';
+    this.events.setAutoEnabled?.(false);
     try { localStorage.setItem(MODE_KEY, 'campaign'); } catch { /* ignore */ }
     this.eco.enforce = false;
     let resumed = false;
@@ -56,6 +57,7 @@ export class GameMode {
     this.events.clear();
     this.save.useSlot('sandbox');
     this.mode = 'sandbox';
+    this.events.setAutoEnabled?.(this.ui.settings?.get().disasters !== false);
     try { localStorage.setItem(MODE_KEY, 'sandbox'); } catch { /* ignore */ }
     if (this.save.hasSave()) this.save.load(); else this.save.newWorld(DEFAULT_SEED);
     this.sim.setRunning(true);

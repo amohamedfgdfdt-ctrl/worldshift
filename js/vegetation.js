@@ -280,9 +280,9 @@ export class Vegetation {
       return false;
     };
 
-    const put = (key, x, y, z, sc, tint, rotY = rng() * Math.PI * 2, tiltY = 0) => {
+    const put = (key, x, y, z, sc, tint, rotY = rng() * Math.PI * 2, tiltY = 0, lean = 0) => {
       dummy.position.set(x, y - 0.05, z);
-      dummy.rotation.set(0, rotY, 0);
+      dummy.rotation.set(lean ? (rng() - 0.5) * 2 * lean : 0, rotY, lean ? (rng() - 0.5) * 2 * lean : 0);
       dummy.scale.set(sc, sc * (1 + tiltY), sc);
       dummy.updateMatrix();
       const id = this._id++;
@@ -303,10 +303,11 @@ export class Vegetation {
       if (rng() > dens * 0.75 + 0.012) continue;
       const pinePref = smoothstep(9, 26, h) * 0.85 + 0.08;
       const key = rng() < pinePref ? 'pine' : (rng() < 0.3 && h < 24 ? 'birch' : 'oak');
-      const s = 0.8 + rng() * 0.55;
-      const t = 0.88 + rng() * 0.24;
-      col.setRGB(t * (0.94 + rng() * 0.12), t, t * (0.9 + rng() * 0.15));
-      put(key, x, h, z, s, col.clone());
+      const s = 0.65 + rng() * 0.8;
+      // per-instance HSL tint: hue / saturation / lightness all wander, so a stand
+      // of the same species still reads as many individuals, not copies
+      col.setHSL(0.24 + rng() * 0.12, 0.3 + rng() * 0.3, 0.78 + rng() * 0.22);
+      put(key, x, h, z, s, col.clone(), rng() * Math.PI * 2, (rng() - 0.5) * 0.16, 0.045);
       trees++;
     }
 
@@ -317,7 +318,7 @@ export class Vegetation {
       if (waterDepthAtNode(x, z) > 0 || !wet(x, z, 3)) continue;
       const t = 0.85 + rng() * 0.3;
       col.setRGB(t, t, t * 0.9);
-      put('reed', x, f.heightAt(x, z), z, 0.8 + rng() * 0.7, col.clone());
+      put('reed', x, f.heightAt(x, z), z, 0.8 + rng() * 0.7, col.clone(), rng() * 6.28, 0, 0.09);
       reeds++;
     }
 
@@ -331,7 +332,7 @@ export class Vegetation {
       if (rng() > smoothstep(-0.1, 0.5, d) * 0.5 + 0.02) continue;
       const t = 0.85 + rng() * 0.3;
       col.setRGB(t, t * (0.95 + rng() * 0.1), t * 0.95);
-      put('bush', x, h, z, 0.7 + rng() * 0.7, col.clone());
+      put('bush', x, h, z, 0.7 + rng() * 0.7, col.clone(), rng() * 6.28, 0, 0.06);
       bushes++;
     }
 
@@ -359,7 +360,7 @@ export class Vegetation {
       if (rng() > smoothstep(0.0, 0.35, forest) * 0.8) continue;
       const t = 0.85 + rng() * 0.3;
       col.setRGB(t * 0.95, t, t * 0.9);
-      put('fern', x, h, z, 0.75 + rng() * 0.6, col.clone());
+      put('fern', x, h, z, 0.75 + rng() * 0.6, col.clone(), rng() * 6.28, 0, 0.07);
       ferns++;
     }
     // tussocks: open meadow
@@ -373,7 +374,7 @@ export class Vegetation {
       if (rng() > smoothstep(0.3, 0.7, d) * (1 - smoothstep(0.1, 0.5, forest)) * 0.8 + 0.01) continue;
       const t = 0.85 + rng() * 0.3;
       col.setRGB(t, t * (0.97 + rng() * 0.06), t * 0.92);
-      put('tussock', x, h, z, 0.8 + rng() * 0.6, col.clone());
+      put('tussock', x, h, z, 0.8 + rng() * 0.6, col.clone(), rng() * 6.28, 0, 0.07);
       tussocks++;
     }
 

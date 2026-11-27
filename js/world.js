@@ -3,6 +3,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { N, VERTS, HALF, CELL, DEFAULT_SEED, isTouchDevice } from './config.js';
 import { HeightField, TerrainMesh } from './terrain.js';
+import { WorldBoundary } from './boundary.js';
 import { WaterSim, WaterMesh } from './water-system.js';
 import { createTextures } from './textures.js';
 import { Environment } from './sky.js';
@@ -11,6 +12,9 @@ import { Vegetation } from './vegetation.js';
 import { BuildingSystem } from './building-system.js';
 import { Emitter } from './utils.js';
 import { updateAtmosphere } from './atmosphere.js';
+import { Rain } from './rain.js';
+import { Life } from './life.js';
+import { NightLights } from './night-lights.js';
 import { RenderPipeline } from './pipeline.js';
 import { Particles } from './particles.js';
 import { windUniforms } from './vegetation.js';
@@ -60,14 +64,19 @@ export class World extends Emitter {
     this.waterMesh = new WaterMesh(this.water, this.terrain.geometry.index, this.textures);
     this.scene.add(this.waterMesh.mesh);
 
+    this.boundary = new WorldBoundary(this.scene, this.field, this.textures);
     this.env = new Environment(this.scene, { cloudOctaves: isTouchDevice ? 3 : 4, shadowSize: QUALITY[this.quality].shadow || 1024 });
     this.rig = new CameraRig(canvas.clientWidth / Math.max(1, canvas.clientHeight), this.field);
+    this.rig.groundAt = (x, z) => this.boundary.heightAt(x, z);
 
     this.vegetation = new Vegetation(this.scene, this.field);
     this.buildings = new BuildingSystem({
       scene: this.scene, field: this.field, water: this.water, vegetation: this.vegetation,
       windMaterial: this.vegetation.windMat,
     });
+    this.nightLights = new NightLights(this.scene, this.buildings);
+    this.rain = new Rain(this.scene);
+    this.life = new Life(this);
 
     // data textures read by the terrain shader
     this.cellData = new Uint8Array(N * N * 4);
@@ -93,6 +102,7 @@ export class World extends Emitter {
     this.buildings.clearAll();
     this.field.generate(this.seed);
     this.terrain.refresh();
+    this.boundary.refresh();
     this.water.syncGround();
     this.water.resetToInitial();
     const f = this.field;
@@ -168,7 +178,9 @@ export class World extends Emitter {
     this.vegetation.cullGrass.value = 175 * dd;
     this.vegetation.setLodScale([0.6, 0.85, 1][g.foliageQuality] * Math.sqrt(dd));
     this.vegetation.lodDist = (g.foliageQuality >= 2 ? 150 : g.foliageQuality === 1 ? 110 : 70) * dd;
-    this.env.fogDensityBase = 0.0014 / dd;
+    // sqrt falloff keeps the boundary mountain range readable through the haze
+    // even on low draw-distance presets, instead of fogging it out completely
+    this.env.fogDensityBase = 0.0014 / Math.sqrt(dd);
     this.scene.fog.density = this.env.fogDensityBase;
     // --- pipeline + resolution
     this.pipeline.configure(g, this.caps || { float: true, maxSamples: 4 });
@@ -228,7 +240,11 @@ export class World extends Emitter {
   frame(dt, sim) {
     this.rig.update(dt, this.viewH);
     const hour = sim.hour;
-    this.env.update(hour, this.rig.cur.target, sim.animTime, this.cloud);
+    // active disasters modulate the sky: rain/storm darken it, drought clears it
+    const ev = sim.events?.active;
+    let cloud = this.cloud;
+    if (ev) cloud = ev.type === 'drought' ? Math.min(cloud, 0.12) : Math.max(cloud, ev.type === 'storm' ? 0.95 : 0.8);
+    this.env.update(hour, this.rig.cur.target, sim.animTime, cloud);
     this.env.followCamera(this.rig.camera);
     this.env.applyToWater(this.waterMesh.uniforms);
     this.waterMesh.uniforms.uTime.value = sim.animTime;
@@ -238,13 +254,16 @@ export class World extends Emitter {
       if ((this._frames & 1) === 0) this.refreshWaterTexture();
     }
     this.buildings.update(dt);
+    this.nightLights.update(this.env.state.nightAmt);
     this._frames++;
     this.rig.camera.updateMatrixWorld();
     this._pv.multiplyMatrices(this.rig.camera.projectionMatrix, this.rig.camera.matrixWorldInverse);
     this._frustum.setFromProjectionMatrix(this._pv);
     this.vegetation.updateLod(this.rig.camera.position, this._frustum);
     for (const st of Object.values(this.buildings.sets)) st.updateLod?.(this.rig.camera.position);
-    windUniforms.uWind.value = this.gfx.foliageQuality > 0 ? this.wind : 0;
+    windUniforms.uWind.value = this.gfx.foliageQuality > 0 ? this.wind * (ev?.type === 'storm' ? 1.8 : 1) : 0;
+    this.rain.update(dt, ev && ev.type !== 'drought' ? (ev.type === 'storm' ? 1 : 0.55) : 0, this.rig.cur.target, this.wind);
+    this.life.update(dt, sim);
     this.scene.fog.density = this.env.fogDensityBase ?? 0.0014;
     this.rig.camera.updateMatrixWorld();
     updateAtmosphere(this.rig.camera, this.env, this.gfx.volumetric);

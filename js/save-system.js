@@ -62,7 +62,7 @@ export class SaveSystem extends Emitter {
       return true;
     } catch (err) {
       console.warn('Save failed', err);
-      this.emit('error', 'Could not save (storage unavailable or full).');
+      this.emit('error', 'save.failed.d');
       return false;
     }
   }
@@ -96,7 +96,7 @@ export class SaveSystem extends Emitter {
       return true;
     } catch (err) {
       console.error('Load failed', err);
-      this.emit('error', 'The save file could not be loaded.');
+      this.emit('error', 'save.loadfailed.d');
       return false;
     }
   }

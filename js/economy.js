@@ -184,6 +184,42 @@ export class EventSystem extends Emitter {
     this.active = null;           // { type, remaining, total, mult, id }
     this.done = [];               // ids of finished events
     this._rng = 1;
+    this._t = 0;                  // game hours since boot (drives the auto scheduler)
+    // Automatic disasters (sandbox): random gaps, weighted by current weather, warned ahead.
+    this.auto = { enabled: false, minGap: 10, maxGap: 28, warn: 3, nextAt: Infinity, warned: false, nextType: 'rain', nextDur: 5, seq: 0 };
+  }
+
+  _scheduleNext() {
+    const a = this.auto, span = a.maxGap - a.minGap;
+    a.nextAt = this._t + a.minGap + this._rand() * span;
+    a.warned = false;
+    // pick the type now so the warning can name it; weight by the current sky
+    const cloud = this.world.cloud ?? 0.45;
+    const w = [
+      ['rain', 0.25 + cloud * 0.9],
+      ['storm', 0.05 + cloud * cloud * 0.7],
+      ['drought', 0.08 + (1 - cloud) * (1 - cloud) * 0.8],
+    ];
+    let r = this._rand() * w.reduce((s, x) => s + x[1], 0), pick = 'rain';
+    for (const [k, v] of w) { r -= v; if (r <= 0) { pick = k; break; } }
+    a.nextType = pick;
+    a.nextDur = pick === 'drought' ? 8 + this._rand() * 7 : pick === 'storm' ? 2 + this._rand() * 2.5 : 4 + this._rand() * 4;
+  }
+
+  _autoUpdate(gh) {
+    const a = this.auto;
+    this._t += gh;
+    if (!a.enabled) return;
+    if (this.active) return;
+    if (!isFinite(a.nextAt)) this._scheduleNext();
+    if (!a.warned && this._t >= a.nextAt - a.warn) {
+      a.warned = true;
+      this.emit('warn', { type: a.nextType, hours: Math.max(1, Math.round(a.nextAt - this._t)) });
+    }
+    if (this._t >= a.nextAt) {
+      this.start(a.nextType, a.nextDur, 'auto-' + (++a.seq));
+      this._scheduleNext();
+    }
   }
 
   _rand() { this._rng = (this._rng * 1664525 + 1013904223) >>> 0; return this._rng / 4294967296; }
@@ -207,7 +243,14 @@ export class EventSystem extends Emitter {
     this.emit('end', a);
   }
 
+  /** Hard-stop an active event and silence the scheduler (campaign takes over). */
+  setAutoEnabled(on) {
+    this.auto.enabled = !!on;
+    if (on && !isFinite(this.auto.nextAt)) this._scheduleNext();
+  }
+
   update(gameMinutes) {
+    this._autoUpdate(gameMinutes / 60);
     const a = this.active; if (!a) return;
     const gh = gameMinutes / 60, d = EVENT_TYPES[a.type];
     const w = this.world.water;
@@ -220,10 +263,11 @@ export class EventSystem extends Emitter {
     if (a.remaining <= 0) this.stop(true);
   }
 
-  serialize() { return { active: this.active, done: this.done, rng: this._rng }; }
+  serialize() { return { active: this.active, done: this.done, rng: this._rng, t: this._t, auto: { ...this.auto } }; }
   load(d = {}) {
     // sourceRate is saved already multiplied by an active event, so just restore the record
-    this.active = d.active || null; this.done = d.done || []; this._rng = d.rng || 1;
+    this.active = d.active || null; this.done = d.done || []; this._rng = d.rng || 1; this._t = d.t || 0;
+    if (d.auto) Object.assign(this.auto, d.auto);
   }
   /** Forget any event without touching the water parameters (used when a world is rebuilt). */
   clear() { this.active = null; this.done = []; }

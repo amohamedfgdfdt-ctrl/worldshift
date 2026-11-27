@@ -50,3 +50,14 @@ Source: 3dassets.dev, author "3D Assets (3dassets)", licence CC0 1.0 Universal (
 ## Automatic LOD (Phase 3)
 
 A variant with a single model file gets generated medium and low levels at load (vertex clustering, `js/lod-gen.js`, ~40 % and ~15 % of the triangles; skipped under 220 triangles; buildings and ground excluded). `"autoLod": false` on an entry or variant turns it off. Report: `assets.report()` lists each level with `url: "auto-lod"`. The generated levels share the original materials and textures (no extra texture memory). Hand-made `lods` in the manifest always win and are never replaced.
+
+## Textures: ambientCG (CC0)
+
+Terrain detail and normal maps are photo-based PBR textures from ambientCG.com,
+licence CC0 1.0 Universal (https://docs.ambientcg.com/license/), no attribution required.
+
+- `assets/textures/ground054/` — Ground054 (grassy soil): Color, NormalGL, Roughness. Used for the terrain detail multiplier and the terrain normal map, with a procedural fallback baked at startup and brightness renormalised on swap so overall terrain brightness is unchanged.
+- `assets/textures/rock035/` — Rock035 (rock face): Color, NormalGL, Roughness. Reserved for rock/mountain surface work.
+
+Downloaded 2026-11-27, 1K JPG sets. If a file is missing or fails to load, the game
+keeps its original procedural textures.

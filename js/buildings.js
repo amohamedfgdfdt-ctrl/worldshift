@@ -143,14 +143,24 @@ function windTurbine() {
 function farm() {
   const b = new ModelBuilder();
   b.box(11.2, 0.22, 11.2, 0, 0, 0, hex(0x5a4331), { jitter: 0.2 });
+  // tilled soil stripes between the crop rows
+  for (let r = 0; r < 9; r++) b.box(9.8, 0.26, 0.3, 0, 0.16, -5.1 + r * 0.82, hex(0x4a3728), { jitter: 0.25 });
+  // three crop types in organized rows: leafy greens, wheat, veg patches
   for (let r = 0; r < 8; r++) {
     const z = -4.7 + r * 0.82;
-    const green = r < 4;
-    b.box(9.6, 0.5, 0.52, 0, 0.2, z, hex(green ? 0x5c9a38 : 0xc9a63c), { jitter: 0.32 });
+    const col = r < 3 ? 0x5c9a38 : r < 6 ? 0xc9a63c : 0x7fae3f;
+    const h = r < 3 ? 0.55 : r < 6 ? 0.72 : 0.45;
+    b.box(9.6, h, 0.5, 0, 0.2, z, hex(col), { jitter: 0.3 });
+    for (let k = 0; k < 6; k++) b.blob(0.16, -4.4 + k * 1.76, 0.2 + h, z, hex(col), { detail: 0, lump: 0.15 });
   }
   for (let r = 0; r < 3; r++) {
     b.box(4.6, 0.36, 0.5, -3.0, 0.2, 2.4 + r * 0.9, hex(0x77a845), { jitter: 0.32 });
   }
+  // dirt path from the field edge to the barn
+  b.box(1.1, 0.24, 4.6, 3.3, 0.18, 0.6, hex(0x8a6f4d), { jitter: 0.3 });
+  // silo next to the barn
+  b.cyl(0.62, 0.62, 3.4, 5.1, 0.2, 1.6, hex(0xb9b2a4), { seg: 10 });
+  b.cone(0.7, 0.6, 5.1, 3.6, 1.6, hex(0x8a8276), { seg: 10 });
   // barn
   b.box(3.8, 2.7, 3.2, 3.3, 0.22, 3.7, hex(0xa23a2f), { jitter: 0.06 });
   b.gable(4.4, 1.6, 3.8, 3.3, 2.92, 3.7, hex(0x4a4540));

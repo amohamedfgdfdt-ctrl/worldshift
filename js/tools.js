@@ -4,6 +4,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import { CELL, N, VERTS, HALF } from './config.js';
 import { Emitter, clamp } from './utils.js';
 import { TYPES, getGeometry, footprintSize, buildSourceMarker } from './buildings.js';
+import { t as tr, rsn } from './i18n.js';
 import { CellOverlay } from './building-system.js';
 
 const GOOD = 0x6dffb0, BAD = 0xff6b78;
@@ -181,7 +182,7 @@ export class Tools extends Emitter {
       if (!g.visible) g.position.copy(target); else g.position.lerp(target, Math.min(1, dt * 22));
       g.rotation.y = (this.rot * Math.PI) / 2;
       g.visible = true;
-      this.emit('hint', { ok: ev.ok, text: ev.ok ? (this.pointer?.type === 'mouse' ? 'Click to place' : 'Tap ✓ to place') : ev.reason });
+      this.emit('hint', { ok: ev.ok, text: ev.ok ? tr(this.pointer?.type === 'mouse' ? 'tool.place' : 'tool.placetap') : rsn(ev.reason) });
       tu.uCursor.value.set(ev.x, ev.z);
     } else if (this.mode === 'road') {
       const cell = [Math.floor((hx + HALF) / CELL), Math.floor((hz + HALF) / CELL)];
@@ -194,9 +195,9 @@ export class Tools extends Emitter {
       this.footprint.setCells(path);
       this.pathValid = valid; this.pathLen = path.length;
       let text;
-      if (!this.anchor) text = ev.ok ? 'Click to start a road' : ev.reason;
-      else text = valid ? `Click to build ${valid} road tile${valid > 1 ? 's' : ''} (Esc to stop)` : ev.reason || 'Nothing can be built here';
-      if (this.pointer?.type !== 'mouse') text = ev.ok || this.anchor ? (this.anchor ? `Tap ✓ to build ${valid} tile${valid > 1 ? 's' : ''}` : 'Tap ✓ to start the road') : ev.reason;
+      if (!this.anchor) text = ev.ok ? tr('tool.roadstart') : rsn(ev.reason);
+      else text = valid ? tr('tool.roadbuild', { n: valid }) : rsn(ev.reason || 'Nothing can be built here');
+      if (this.pointer?.type !== 'mouse') text = ev.ok || this.anchor ? (this.anchor ? tr('tool.roadbuildtap', { n: valid }) : tr('tool.roadstarttap')) : rsn(ev.reason);
       this.emit('hint', { ok: valid > 0, text });
     } else if (this.mode === 'source') {
       const i = clamp(Math.round((hx + HALF) / CELL), 0, N), j = clamp(Math.round((hz + HALF) / CELL), 0, N);
@@ -208,14 +209,14 @@ export class Tools extends Emitter {
       this.ghost.rotation.y = 0;
       this.ghost.visible = true;
       this.footprint.hide();
-      this.emit('hint', { ok: ev.ok, text: ev.ok ? (this.pointer?.type === 'mouse' ? 'Click to place a water source' : 'Tap ✓ to place a water source') : ev.reason });
+      this.emit('hint', { ok: ev.ok, text: ev.ok ? tr(this.pointer?.type === 'mouse' ? 'tool.srcplace' : 'tool.srcplacetap') : rsn(ev.reason) });
     } else if (this.mode === 'pour' || this.mode === 'drain') {
       this._updateRing(hx, hz);
       if (this.brushOn) {
         const v = this.pourRate * dt * (this.mode === 'pour' ? 1 : -1.3);
         w.water.addVolume(hx, hz, this.brushRadius, v);
       }
-      this.emit('hint', { ok: true, text: this.pointer?.type === 'mouse' ? (this.mode === 'pour' ? 'Hold left mouse to pour water' : 'Hold left mouse to drain water') : (this.mode === 'pour' ? 'Press and hold to pour water' : 'Press and hold to drain water') });
+      this.emit('hint', { ok: true, text: this.pointer?.type === 'mouse' ? tr(this.mode === 'pour' ? 'tool.pour' : 'tool.drain') : tr(this.mode === 'pour' ? 'tool.pourtap' : 'tool.draintap') });
     }
   }
 
@@ -279,15 +280,15 @@ export class Tools extends Emitter {
         const g = this.gate?.canPlace('road'); if (g && !g.ok) { reason = g.reason; break; }
         const r = bs.placeRoad(i, j); if (r.ok) { n++; this.gate?.placed('road'); } else if (!r.exists) reason = r.reason;
       }
-      if (n) { this.emit('toast', { text: `${n} road tile${n > 1 ? 's' : ''} built`, kind: 'ok' }); this.anchor = cell; }
+      if (n) { this.emit('toast', { text: tr('tool.roadbuilt', { n }), kind: 'ok' }); this.anchor = cell; }
       else if (this.anchor === null && this.eval.exists) this.anchor = cell;
-      else this.emit('toast', { text: reason || this.eval.reason || 'Cannot build here', kind: 'warn' });
+      else this.emit('toast', { text: rsn(reason || this.eval.reason || 'Cannot build here'), kind: 'warn' });
     } else if (this.mode === 'source' && this.eval) {
       const g = this.gate?.canPlace('source');
       if (g && !g.ok) { this.emit('toast', { text: g.reason, kind: 'warn' }); return; }
       const r = bs.placeSource(this.eval.i, this.eval.j, this.gate ? Math.min(10, this.sourceRate) : this.sourceRate);
-      if (r.ok) { this.gate?.placed('source'); this.emit('toast', { text: 'Water source placed', kind: 'ok' }); }
-      else this.emit('toast', { text: r.reason, kind: 'warn' });
+      if (r.ok) { this.gate?.placed('source'); this.emit('toast', { text: tr('tool.srcplaced'), kind: 'ok' }); }
+      else this.emit('toast', { text: rsn(r.reason), kind: 'warn' });
     }
   }
 
@@ -330,10 +331,10 @@ export class Tools extends Emitter {
     if (!s) return false;
     const bs = this.world.buildings;
     let ok = false, name = '';
-    if (s.kind === 'building') { const k = bs.buildings.get(s.id)?.key; name = TYPES[k]?.name || 'Building'; ok = bs.remove(s.id); if (ok && k) this.gate?.removed(k); }
-    else if (s.kind === 'road') { name = 'Road'; ok = bs.removeRoad(s.cx, s.cz); if (ok) this.gate?.removed('road'); }
-    else if (s.kind === 'source') { name = 'Water source'; bs.removeSource(s.id); ok = true; this.gate?.removed('source'); }
-    if (ok) { this.emit('toast', { text: `${name} removed`, kind: 'ok' }); this.select(null); }
+    if (s.kind === 'building') { const k = bs.buildings.get(s.id)?.key; name = (k && tr('b.' + k)) || tr('tool.building'); ok = bs.remove(s.id); if (ok && k) this.gate?.removed(k); }
+    else if (s.kind === 'road') { name = tr('tool.road'); ok = bs.removeRoad(s.cx, s.cz); if (ok) this.gate?.removed('road'); }
+    else if (s.kind === 'source') { name = tr('tool.watersource'); bs.removeSource(s.id); ok = true; this.gate?.removed('source'); }
+    if (ok) { this.emit('toast', { text: tr('tool.removed', { name }), kind: 'ok' }); this.select(null); }
     return ok;
   }
 }

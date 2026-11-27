@@ -65,6 +65,54 @@ function makeTex(data, size, { mip = true } = {}) {
   return t;
 }
 
+// Procedural fallback baked into a canvas, then swapped for a real photo texture
+// (ambientCG, CC0) once it loads. The swap renormalises brightness so the shader's
+// detail multiplier keeps its original average level; on any error the fallback stays.
+function makePhotoTex(fallback, size, url, { normalizeMean = false } = {}) {
+  const cnv = document.createElement('canvas');
+  cnv.width = cnv.height = size;
+  const ctx = cnv.getContext('2d');
+  const im = ctx.createImageData(size, size);
+  im.data.set(fallback);
+  ctx.putImageData(im, 0, 0);
+  const t = new THREE.CanvasTexture(cnv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  new THREE.ImageLoader().load(url, (img) => {
+    if (normalizeMean) {
+      const c2 = document.createElement('canvas');
+      c2.width = c2.height = img.width;
+      const x2 = c2.getContext('2d');
+      x2.drawImage(img, 0, 0);
+      const d = x2.getImageData(0, 0, c2.width, c2.height);
+      const px = d.data;
+      let mean = 0;
+      for (let i = 0; i < px.length; i += 4) mean += px[i];
+      mean /= (px.length / 4) * 255;
+      // target: the procedural fallback's mean (keeps terrain brightness unchanged)
+      let fb = 0;
+      for (let i = 0; i < fallback.length; i += 4) fb += fallback[i];
+      fb /= (fallback.length / 4) * 255;
+      const k = Math.min(2.2, Math.max(0.45, fb / Math.max(mean, 1e-3)));
+      if (Math.abs(k - 1) > 0.03) {
+        for (let i = 0; i < px.length; i++) {
+          const v = px[i] * k;
+          px[i] = v > 255 ? 255 : v;
+        }
+        x2.putImageData(d, 0, 0);
+      }
+      t.image = c2;
+    } else {
+      t.image = img;
+    }
+    t.needsUpdate = true;
+  }, undefined, () => { /* keep the procedural fallback */ });
+  return t;
+}
+
 export function createTextures(size = 256) {
   // grayscale detail multiplier used for terrain albedo variation
   const hd = tileableFbm(size, 6, 5, 31, 0.55);
@@ -73,11 +121,11 @@ export function createTextures(size = 256) {
     const v = Math.round(Math.min(1, Math.max(0, 0.42 + hd[i] * 0.75)) * 255);
     gray[i * 4] = gray[i * 4 + 1] = gray[i * 4 + 2] = v; gray[i * 4 + 3] = 255;
   }
-  const detail = makeTex(gray, size);
+  const detail = makePhotoTex(gray, size, 'assets/textures/ground054/Ground054_1K-JPG_Color.jpg', { normalizeMean: true });
 
-  // fine grain normal map for terrain
+  // fine grain normal map for terrain (real ground normal, procedural fallback)
   const hn = tileableFbm(size, 16, 4, 77, 0.6);
-  const normal = makeTex(toNormalMap(hn, size, 7.0), size);
+  const normal = makePhotoTex(toNormalMap(hn, size, 7.0), size, 'assets/textures/ground054/Ground054_1K-JPG_NormalGL.jpg');
 
   // water ripple normal map (softer, larger features)
   const hw = tileableFbm(size, 8, 4, 123, 0.55);
