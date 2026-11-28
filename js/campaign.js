@@ -60,7 +60,7 @@ export class Campaign extends Emitter {
       isLocked(key, tool = false) { const a = self.available(); return tool ? !a.tools.has(key) : !a.types.has(key); },
       lockText(key, tool = false) { const s = self.unlockedBy(key); return s ? t('locked.until', { stage: t(`st.${s.id}.name`) }) : t('cost.locked'); },
       canPlace(key, n = 1) {
-        if (key !== 'road' && key !== 'source' && this.isLocked(key)) return { ok: false, reason: t('cost.locked') };
+        if (key !== 'road' && key !== 'bridge' && key !== 'source' && this.isLocked(key)) return { ok: false, reason: t('cost.locked') };
         const c = self.economy.costOf(key, n);
         if (!self.economy.canAfford(c)) return { ok: false, reason: t('cost.no', { cost: i18n.num(c) }) };
         return { ok: true, cost: c };
@@ -129,6 +129,8 @@ export class Campaign extends Emitter {
     switch (o.type) {
       case 'build': v = this._count(o, bs, s); cond = v >= target; break;
       case 'roads': v = bs.roads.size; cond = v >= target; break;
+      case 'roadConnected': v = s.connected; cond = v >= target; break;
+      case 'trips': v = eco.stats.trips || 0; cond = v >= target; break;
       case 'population': v = s.pop; cond = v >= target; break;
       case 'waterStored': v = Math.round(s.waterStock); cond = v >= target; break;
       case 'foodStock': v = Math.round(eco.food); cond = v >= target; break;
@@ -175,6 +177,8 @@ export class Campaign extends Emitter {
     switch (o.type) {
       case 'build': return o.key ? t('obj.build', { n, name: t('b.' + o.key) }) : t('obj.buildAny', { n });
       case 'roads': return t('obj.roads', { n });
+      case 'roadConnected': return t('obj.roadConnected', { n });
+      case 'trips': return t('obj.trips', { n });
       case 'population': return t('obj.population', { n });
       case 'waterStored': return t('obj.waterStored', { n });
       case 'foodStock': return t('obj.foodStock', { n });

@@ -127,6 +127,15 @@ export function createTextures(size = 256) {
   const hn = tileableFbm(size, 16, 4, 77, 0.6);
   const normal = makePhotoTex(toNormalMap(hn, size, 7.0), size, 'assets/textures/ground054/Ground054_1K-JPG_NormalGL.jpg');
 
+  // rock face detail (Rock035 photo, brightness-normalized grey multiplier)
+  const hrk = tileableFbm(size, 9, 5, 301, 0.6);
+  const rgray = new Uint8Array(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const v = Math.round(Math.min(1, Math.max(0, 0.45 + hrk[i] * 0.7)) * 255);
+    rgray[i * 4] = rgray[i * 4 + 1] = rgray[i * 4 + 2] = v; rgray[i * 4 + 3] = 255;
+  }
+  const rock = makePhotoTex(rgray, size, 'assets/textures/rock035/Rock035_1K-JPG_Color.jpg', { normalizeMean: true });
+
   // water ripple normal map (softer, larger features)
   const hw = tileableFbm(size, 8, 4, 123, 0.55);
   const waterNormal = makeTex(toNormalMap(hw, size, 9.0), size);
@@ -140,5 +149,5 @@ export function createTextures(size = 256) {
   }
   const foam = makeTex(fd, size);
 
-  return { detail, normal, waterNormal, foam };
+  return { detail, normal, waterNormal, foam, rock };
 }

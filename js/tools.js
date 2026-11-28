@@ -4,7 +4,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import { CELL, N, VERTS, HALF } from './config.js';
 import { Emitter, clamp } from './utils.js';
 import { TYPES, getGeometry, footprintSize, buildSourceMarker } from './buildings.js';
-import { t as tr, rsn } from './i18n.js';
+import { t as tr, rsn, i18n } from './i18n.js';
 import { CellOverlay } from './building-system.js';
 
 const GOOD = 0x6dffb0, BAD = 0xff6b78;
@@ -17,7 +17,10 @@ export class Tools extends Emitter {
     this.gate = null;                // set by the Campaign (costs + locks); null in Sandbox
     this.key = null;               // building key in build mode
     this.rot = 0;
-    this.anchor = null;            // road chain start [cx,cz]
+    this.anchor = null;            // road route start [cx,cz]
+    this.route = null;             // last computed route preview
+    this._routeCell = null;
+    this._routeAt = 0;
     this.pointer = null;           // {x,y,type}
     this.hit = null;               // terrain hit [x,y,z]
     this.eval = null;
@@ -33,8 +36,9 @@ export class Tools extends Emitter {
 
     const scene = world.scene;
     this.footprint = new CellOverlay(world.field, { color: GOOD, opacity: 0.42 });
+    this.bridgeOverlay = new CellOverlay(world.field, { color: 0x6fc4ff, opacity: 0.55, order: 8 });
     this.selOverlay = new CellOverlay(world.field, { color: 0xa78bff, opacity: 0.5, order: 9 });
-    scene.add(this.footprint.mesh, this.selOverlay.mesh);
+    scene.add(this.footprint.mesh, this.bridgeOverlay.mesh, this.selOverlay.mesh);
 
     this.ghostMat = new THREE.MeshStandardMaterial({
       color: GOOD, transparent: true, opacity: 0.55, roughness: 0.6, depthWrite: false,
@@ -74,12 +78,12 @@ export class Tools extends Emitter {
       if (locked) { this.emit('toast', { text: g.lockText(mode === 'build' ? key : mode, mode !== 'build'), kind: 'warn' }); return; }
     }
     if (mode === this.mode && key === this.key) { if (mode !== 'select') return this.cancel(); return; }
-    this.mode = mode; this.key = key; this.anchor = null; this.eval = null; this.lastTouchCell = null;
+    this.mode = mode; this.key = key; this.anchor = null; this.route = null; this.eval = null; this.lastTouchCell = null;
     this.rot = 0;
     this.brushOn = false;
     this.controls.brushMode = mode === 'pour' || mode === 'drain';
     if (mode !== 'select') this.select(null);
-    this.footprint.hide(); this.ghost.visible = false; this.ring.visible = false;
+    this.footprint.hide(); this.bridgeOverlay.hide(); this.ghost.visible = false; this.ring.visible = false;
     if (mode === 'build') {
       this.ghost.geometry = getGeometry(key);
     } else if (mode === 'source') {
@@ -136,16 +140,45 @@ export class Tools extends Emitter {
     return [Math.round(gx - w / 2), Math.round(gz - d / 2)];
   }
 
-  _linePath(a, b) {
-    const path = [];
-    const horizFirst = Math.abs(b[0] - a[0]) >= Math.abs(b[1] - a[1]);
-    const sx = Math.sign(b[0] - a[0]), sz = Math.sign(b[1] - a[1]);
-    let x = a[0], z = a[1];
-    path.push([x, z]);
-    const stepX = () => { while (x !== b[0]) { x += sx; path.push([x, z]); } };
-    const stepZ = () => { while (z !== b[1]) { z += sz; path.push([x, z]); } };
-    if (horizFirst) { stepX(); stepZ(); } else { stepZ(); stepX(); }
-    return path.slice(0, 150);
+  /**
+   * Where a tap should really start or end a road: on a building's front tile,
+   * on the nearest existing road, or on the tapped tile when it is buildable.
+   */
+  _snapRoadCell(cell, toward = null) {
+    const bs = this.world.buildings;
+    const [i, j] = cell;
+    if (!bs.inBounds(i, j)) return null;
+    const o = bs.occAt(i, j);
+    if (o > 0) {
+      const b = bs.buildings.get(o);
+      return b ? bs.accessTileFor(b, toward) : null;
+    }
+    if (o === -1) return [i, j];
+    // a tap next to an existing road joins that road instead of starting a new one
+    const near = bs.router.nearest(i, j, (x, y) => bs.occAt(x, y) === -1, 2);
+    if (near) return near;
+    if (bs.router.passable(i, j)) return [i, j];
+    return bs.router.nearest(i, j, (x, y) => bs.router.passable(x, y), 3);
+  }
+
+  /** Cheap cached route preview between the anchor and the hovered tile. */
+  _roadPreview(cell) {
+    const bs = this.world.buildings;
+    const now = performance.now();
+    if (this._routeCell && this._routeCell[0] === cell[0] && this._routeCell[1] === cell[1] && this.route) return this.route;
+    if (this._routeCell && now - this._routeAt < 70) return this.route;
+    this._routeCell = [cell[0], cell[1]];
+    this._routeAt = now;
+    this.route = bs.routeCells(this.anchor, cell);
+    return this.route;
+  }
+
+  /** Price of a route in Campaign funds (0 in Sandbox). */
+  routeCost(route) {
+    const eco = this.world.sim?.economy;
+    if (!route || !this.gate || !eco) return 0;
+    const n = Math.max(0, (route.cells?.length || 0) - (route.bridges || 0));
+    return eco.costOf('road', n) + eco.costOf('bridge', route.bridges || 0);
   }
 
   // ---------------------------------------------------------------- per frame
@@ -185,20 +218,28 @@ export class Tools extends Emitter {
       this.emit('hint', { ok: ev.ok, text: ev.ok ? tr(this.pointer?.type === 'mouse' ? 'tool.place' : 'tool.placetap') : rsn(ev.reason) });
       tu.uCursor.value.set(ev.x, ev.z);
     } else if (this.mode === 'road') {
-      const cell = [Math.floor((hx + HALF) / CELL), Math.floor((hz + HALF) / CELL)];
+      const raw = [Math.floor((hx + HALF) / CELL), Math.floor((hz + HALF) / CELL)];
+      const cell = this._snapRoadCell(raw, this.anchor) || raw;
       const ev = bs.evaluateRoad(cell[0], cell[1]);
-      this.eval = { ...ev, cell };
-      const path = this.anchor ? this._linePath(this.anchor, cell) : [cell];
-      let valid = 0;
-      for (const [i, j] of path) if (bs.evaluateRoad(i, j).ok) valid++;
-      this.footprint.setColor(valid > 0 && (ev.ok || ev.exists) ? GOOD : BAD);
-      this.footprint.setCells(path);
-      this.pathValid = valid; this.pathLen = path.length;
-      let text;
-      if (!this.anchor) text = ev.ok ? tr('tool.roadstart') : rsn(ev.reason);
-      else text = valid ? tr('tool.roadbuild', { n: valid }) : rsn(ev.reason || 'Nothing can be built here');
-      if (this.pointer?.type !== 'mouse') text = ev.ok || this.anchor ? (this.anchor ? tr('tool.roadbuildtap', { n: valid }) : tr('tool.roadstarttap')) : rsn(ev.reason);
-      this.emit('hint', { ok: valid > 0, text });
+      this.eval = { ...ev, cell, raw };
+      if (!this.anchor) {
+        this.bridgeOverlay.hide();
+        this.route = null;
+        this.footprint.setColor(ev.ok || ev.exists ? GOOD : BAD);
+        this.footprint.setCells([cell]);
+        this.emit('hint', { ok: ev.ok || ev.exists, text: this.pointer?.type === 'mouse' ? tr('tool.roadpick') : tr('tool.roadpicktap') });
+      } else {
+        const route = this._roadPreview(cell);
+        const cells = route.ok ? route.cells : [cell];
+        this.footprint.setColor(route.ok ? GOOD : BAD);
+        this.footprint.setCells(cells);
+        const bcells = route.ok ? cells.filter(([i, j]) => !!bs.router._eval(i, j)?.bridge) : [];
+        if (bcells.length) this.bridgeOverlay.setCells(bcells); else this.bridgeOverlay.hide();
+        const text = route.ok
+          ? tr('tool.roadpreview', { n: i18n.num(route.cells.length), b: i18n.num(route.bridges), c: this.gate ? i18n.num(this.routeCost(route)) : '–' })
+          : tr('tool.roadfail');
+        this.emit('hint', { ok: route.ok, text });
+      }
     } else if (this.mode === 'source') {
       const i = clamp(Math.round((hx + HALF) / CELL), 0, N), j = clamp(Math.round((hz + HALF) / CELL), 0, N);
       const ev = bs.evaluateSource(i, j);
@@ -257,7 +298,7 @@ export class Tools extends Emitter {
 
   _cellKey() {
     if (this.mode === 'build' && this.eval) return `${this.eval.cx},${this.eval.cz},${this.rot}`;
-    if (this.mode === 'road' && this.eval?.cell) return this.eval.cell.join(',');
+    if (this.mode === 'road' && this.eval?.cell) return (this.anchor ? 'r' : 'a') + this.eval.cell.join(',');
     if (this.mode === 'source' && this.eval) return `${this.eval.i},${this.eval.j}`;
     return '';
   }
@@ -274,15 +315,27 @@ export class Tools extends Emitter {
       else this.emit('toast', { text: res.reason, kind: 'warn' });
     } else if (this.mode === 'road' && this.eval?.cell) {
       const cell = this.eval.cell;
-      const path = this.anchor ? this._linePath(this.anchor, cell) : [cell];
-      let n = 0, reason = '';
-      for (const [i, j] of path) {
-        const g = this.gate?.canPlace('road'); if (g && !g.ok) { reason = g.reason; break; }
-        const r = bs.placeRoad(i, j); if (r.ok) { n++; this.gate?.placed('road'); } else if (!r.exists) reason = r.reason;
+      if (!this.anchor) {
+        const st = this._snapRoadCell(cell) || cell;
+        if (bs.occAt(st[0], st[1]) !== -1 && !bs.router.passable(st[0], st[1])) {
+          this.emit('toast', { text: rsn(this.eval.reason || 'Cannot build here'), kind: 'warn' });
+          return;
+        }
+        this.anchor = st;
+        this.route = null; this._routeCell = null;
+        this.emit('toast', { text: tr('tool.roadstarted'), kind: 'ok' });
+        return;
       }
-      if (n) { this.emit('toast', { text: tr('tool.roadbuilt', { n }), kind: 'ok' }); this.anchor = cell; }
-      else if (this.anchor === null && this.eval.exists) this.anchor = cell;
-      else this.emit('toast', { text: rsn(reason || this.eval.reason || 'Cannot build here'), kind: 'warn' });
+      const route = bs.routeCells(this.anchor, cell);
+      if (!route.ok) { this.emit('toast', { text: tr('tool.roadfail'), kind: 'warn' }); return; }
+      const res = this._buildRoute(route);
+      if (res.built) {
+        this.emit('toast', {
+          text: this.gate ? tr('tool.roadbuiltcost', { n: i18n.num(res.built), c: i18n.num(res.spent) }) : tr('tool.roadbuilt2', { n: i18n.num(res.built), b: i18n.num(route.bridges) }),
+          kind: 'ok',
+        });
+        this.anchor = null; this.route = null; this._routeCell = null;
+      } else if (!res.stopped) this.emit('toast', { text: tr('tool.roadfail'), kind: 'warn' });
     } else if (this.mode === 'source' && this.eval) {
       const g = this.gate?.canPlace('source');
       if (g && !g.ok) { this.emit('toast', { text: g.reason, kind: 'warn' }); return; }
@@ -290,6 +343,46 @@ export class Tools extends Emitter {
       if (r.ok) { this.gate?.placed('source'); this.emit('toast', { text: tr('tool.srcplaced'), kind: 'ok' }); }
       else this.emit('toast', { text: rsn(r.reason), kind: 'warn' });
     }
+  }
+
+  /** Place every new tile of a route, charging the Campaign gate per tile. */
+  _buildRoute(route) {
+    const bs = this.world.buildings, eco = this.world.sim?.economy;
+    let built = 0, spent = 0, stopped = false, bridges = 0;
+    for (const [i, j] of route.cells) {
+      if (bs.occAt(i, j) === -1) continue;
+      const bridge = !!bs.router._eval(i, j)?.bridge;
+      const key = bridge ? 'bridge' : 'road';
+      const g = this.gate?.canPlace(key);
+      if (g && !g.ok) { this.emit('toast', { text: g.reason, kind: 'warn' }); stopped = true; break; }
+      const r = bs.placeRoad(i, j, true, { bridge });
+      if (r.ok) {
+        built++;
+        if (bridge) bridges++;
+        if (this.gate && eco) spent += eco.costOf(key);
+        this.gate?.placed(key);
+      }
+    }
+    bs.net.build();
+    bs._roadDirty = true;
+    if (built) bs.emit('change', { type: 'road' });
+    return { built, spent, bridges, stopped };
+  }
+
+  /** Build the shortest spur from a building to the nearest existing road. */
+  connectBuilding(id) {
+    const bs = this.world.buildings;
+    const b = bs.buildings.get(id);
+    if (!b) return { ok: false, reason: 'none' };
+    if (bs.accessCell(b)) return { ok: false, reason: 'already' };
+    const target = bs.nearestRoadTile(b, 14);
+    if (!target) return { ok: false, reason: 'noroad' };
+    const from = bs.accessTileFor(b, target);
+    if (!from) return { ok: false, reason: 'noroad' };
+    const route = bs.routeCells(from, target);
+    if (!route.ok) return { ok: false, reason: 'unreachable' };
+    const res = this._buildRoute(route);
+    return { ok: res.built > 0, ...res, route };
   }
 
   _selectAt(e) {

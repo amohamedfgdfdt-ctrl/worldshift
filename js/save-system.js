@@ -88,6 +88,7 @@ export class SaveSystem extends Emitter {
       w.water.params.sourceRate = d.water?.sourceRate ?? 1;
       w.water.params.sourcesEnabled = d.water?.sourcesEnabled ?? true;
       if (d.water?.rle) w.water.decode(d.water.rle);
+      w.buildings.recalcBridges();
       this.sim.load(d.sim || {});
       this.settings.apply({ ...(d.settings || {}), save: false });
       if (this.slot === 'campaign' && this.hooks) this.hooks.apply(d);

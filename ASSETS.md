@@ -61,3 +61,16 @@ licence CC0 1.0 Universal (https://docs.ambientcg.com/license/), no attribution 
 
 Downloaded 2026-11-27, 1K JPG sets. If a file is missing or fails to load, the game
 keeps its original procedural textures.
+
+## Models: Poly Haven photoscanned (CC0) — v2 realism pass
+
+Photoscanned hero assets from polyhaven.com, licence CC0 1.0 Universal (https://polyhaven.com/license), no attribution required. Downloaded 2026-11-27 as glTF + 1K JPG PBR textures, welded and decimated with gltf-transform (meshoptimizer) to LOD0 budgets below; the game's automatic LOD pass (js/lod-gen.js) generates the medium/low levels at load.
+
+- `assets/models/vegetation/trees/fir_tree_01.glb` — European fir (https://polyhaven.com/a/fir_tree_01), ~11k tris, manifest target `pine` (variant `fir_real`).
+- `assets/models/vegetation/trees/jacaranda_tree.glb` — flowering jacaranda (https://polyhaven.com/a/jacaranda_tree), ~13k tris, target `oak` (variant `jacaranda_real`).
+- `assets/models/vegetation/trees/tree_small_02.glb` — small broadleaf tree (https://polyhaven.com/a/tree_small_02), ~11k tris, target `birch` (variant `broadleaf_real`).
+- `assets/models/environment/rocks/rock_07.glb` — scanned rock (https://polyhaven.com/a/rock_07), ~5k tris, target `rock` (variant `rock_real_a`).
+- `assets/models/environment/rocks/stone_01.glb` — scanned stone (https://polyhaven.com/a/stone_01), ~3.3k tris, target `rock` (variant `rock_real_b`).
+- `assets/models/environment/street_rat.glb` — scanned rat (https://polyhaven.com/a/street_rat), ~4.5k tris, reserved for ambient wildlife.
+
+`pine_tree_01` (https://polyhaven.com/a/pine_tree_01) was evaluated and dropped: its source geometry (949 MB bin) exceeds this build machine's memory; `fir_tree_01` covers the conifer slot. `boulder_01` was dropped: meshoptimizer could not simplify its proxy mesh below ~54k tris without visible damage; `rock_07` + `stone_01` cover the slot.

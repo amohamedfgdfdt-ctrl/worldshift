@@ -360,14 +360,26 @@ vec3 skyCol(vec3 r) {
 
 vec2 rippleNormal(vec2 p, vec2 flow, float t) {
   float sp = length(flow);
-  vec2 f = flow * 0.55 + vec2(0.35, 0.12) * (1.0 - smoothstep(0.0, 0.8, sp));
-  float ph0 = fract(t * 0.35), ph1 = fract(t * 0.35 + 0.5);
-  float w = abs(2.0 * ph0 - 1.0);
-  vec2 n0 = texture2D(uNormalTex, p * 0.115 - f * ph0 * 0.9).xy * 2.0 - 1.0;
-  vec2 n1 = texture2D(uNormalTex, p * 0.115 - f * ph1 * 0.9 + 0.5).xy * 2.0 - 1.0;
-  vec2 a = mix(n0, n1, w);
-  vec2 b = texture2D(uNormalTex, p * 0.31 + vec2(t * 0.03, -t * 0.02)).xy * 2.0 - 1.0;
-  return a * 0.55 + b * 0.35;
+  // flow-aligned frame: ripples stretch ALONG the current and advect with it,
+  // so the eye reads the flow direction (reference: real rivers)
+  vec2 dir = sp > 0.04 ? flow / sp : vec2(1.0, 0.0);
+  vec2 side = vec2(-dir.y, dir.x);
+  float along = dot(p, dir), across = dot(p, side);
+  float adv = sp * t;
+  vec2 uv1 = vec2(along * 0.045 - adv * 0.42, across * 0.19);
+  vec2 uv2 = vec2(along * 0.11 - adv * 0.83, across * 0.37) + 0.5;
+  vec2 n0 = texture2D(uNormalTex, uv1).xy * 2.0 - 1.0;
+  vec2 n1 = texture2D(uNormalTex, uv2).xy * 2.0 - 1.0;
+  // calm water: gentle isotropic drift, two phasing layers (no visible sliding)
+  float ph0 = fract(t * 0.3), ph1 = fract(t * 0.3 + 0.5);
+  float wph = abs(2.0 * ph0 - 1.0);
+  vec2 a0 = texture2D(uNormalTex, p * 0.085 - vec2(0.32, 0.13) * ph0 * 0.8).xy * 2.0 - 1.0;
+  vec2 a1 = texture2D(uNormalTex, p * 0.085 - vec2(0.32, 0.13) * ph1 * 0.8 + 0.5).xy * 2.0 - 1.0;
+  vec2 amb = mix(a0, a1, wph) * 0.6 + texture2D(uNormalTex, p * 0.31 + vec2(t * 0.02, -t * 0.016)).xy * 2.0 - 1.0;
+  float wFlow = smoothstep(0.04, 0.55, sp);
+  vec2 n = mix(amb, n0 * 0.75 + n1 * 0.55, wFlow);
+  // rotate the flow-space normal back into world axes
+  return dir * n.x + side * n.y;
 }
 
 void main() {
@@ -413,30 +425,45 @@ void main() {
   float diff = 0.55 + 0.45 * max(dot(N, uSunDir), 0.0);
   body *= diff;
   // depth colouring: shallow water picks up a sandy tint, deep water gets darker
-  if (uQ > 1.5) body = mix(body, body * vec3(1.15, 1.1, 0.9), (1.0 - smoothstep(0.0, 0.6, dep)) * 0.5);
+  body = mix(body, body * vec3(1.16, 1.12, 0.92), (1.0 - smoothstep(0.0, 0.6, dep)) * 0.55);
+  // clear-water turquoise in mid shallows (reference: pond/river photos)
+  body = mix(body, body * vec3(0.9, 1.12, 1.08), smoothstep(0.15, 0.7, dep) * (1.0 - smoothstep(0.9, 2.2, dep)) * 0.4);
 
   vec3 col = mix(body, sky, clamp(fres * 0.9 + 0.04, 0.0, 1.0));
   col += spec;
+
+  // sun/moon glints: sparse sparkles riding the ripple field (reference images)
+  if (uRefl > 0.5) {
+    float gl = texture2D(uFoamTex, vWPos.xz * 1.31 + vec2(uTime * 0.11, -uTime * 0.07)).r;
+    float glint = smoothstep(0.90, 0.995, gl) * pow(max(dot(R, uSunDir), 0.0), 14.0);
+    col += uSunColor * glint * 1.6 * smoothstep(-0.02, 0.1, uSunDir.y);
+  }
 
   // foam
   float speed = length(vFlow);
   float shore, rapid = 0.0, fn = 0.5;
   if (uQ > 0.5) {
-    fn = texture2D(uFoamTex, vWPos.xz * 0.09 + vFlow * uTime * -0.05).r;
+    // foam texture advected along the actual flow direction
+    vec2 fdir = speed > 0.04 ? vFlow / speed : vec2(1.0, 0.0);
+    float fa = dot(vWPos.xz, fdir), fc = dot(vWPos.xz, vec2(-fdir.y, fdir.x));
+    fn = texture2D(uFoamTex, vec2(fa * 0.05 - speed * uTime * 0.045, fc * 0.13)).r;
     float fn2 = texture2D(uFoamTex, vWPos.xz * 0.23 - vec2(uTime * 0.02)).r;
-    shore = smoothstep(0.16, 0.012, dep) * (0.25 + 0.55 * fn);
-    rapid = smoothstep(2.0, 5.0, speed) * fn * fn2 * 1.6;
-    if (uQ > 1.5) rapid += vFoam * (0.35 + 0.9 * fn * fn2) * smoothstep(0.02, 0.3, dep);
+    // thin shoreline lap band only (was a wide white rim)
+    shore = smoothstep(0.10, 0.012, dep) * (0.16 + 0.4 * fn);
+    // foam reserved for genuinely fast water (rapids), not every river reach
+    rapid = smoothstep(2.8, 5.5, speed) * fn * fn2 * 1.5;
+    if (uQ > 1.5) rapid += min(vFoam, 0.85) * (0.3 + 0.8 * fn * fn2) * smoothstep(0.02, 0.3, dep);
   } else {
-    shore = smoothstep(0.1, 0.01, dep) * 0.5;
+    shore = smoothstep(0.08, 0.008, dep) * 0.4;
   }
-  float foam = clamp(shore * 0.9 + rapid, 0.0, 1.0);
-  col = mix(col, vec3(0.9, 0.95, 1.0) * uLight, foam * 0.7);
+  float foam = clamp(shore * 0.85 + rapid, 0.0, 1.0);
+  col = mix(col, vec3(0.88, 0.93, 0.98) * uLight, foam * 0.6);
 
   float alpha = 0.30 + 0.68 * (1.0 - exp(-dep * 1.05));
   alpha = max(alpha, fres);
   alpha = max(alpha, foam * 0.9);
-  alpha *= smoothstep(0.006, 0.14, dep);
+  // soft shoreline blend into the bank (no hard water edge)
+  alpha *= smoothstep(0.004, 0.20, dep);
 
   float dist = length(cameraPosition - vWPos);
   float fog = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);

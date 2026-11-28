@@ -74,7 +74,12 @@ export class Simulation extends Emitter {
       const flood = bs.floodInfo(b).depth;
       const eco = this.economy?.enforce ? this.economy : null;   // Campaign: needs gate growth
       if (flood > 0.5 || (eco && eco.mustLeave())) { if (b.state.residents > 0) { b.state.residents--; changed = true; } }
-      else if (b.state.residents < t.capacity && (!eco || eco.canGrow())) { b.state.residents++; changed = true; }
+      else if (b.state.residents < t.capacity && (!eco || eco.canGrow())) {
+        // a house the road network does not reach fills three times slower
+        const linked = !!bs.accessCell(b);
+        b.state.growAcc = (b.state.growAcc || 0) + 1;
+        if (linked || b.state.growAcc % 3 === 0) { b.state.residents++; changed = true; }
+      }
     }
     if (changed) this.emit('population');
   }

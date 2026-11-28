@@ -161,6 +161,7 @@ export class AssetManager {
       try {
         const gltf = await this._parse(new URL(l.url, base).href);
         const f = this.flatten(gltf.scene);
+        for (const m of f.materials) this._fixFoliage(m);
         levels.push({ ...f, distance: l.distance, url: l.url, level: l.level });
       } catch (err) {
         if (i === 0) throw new Error(`high-detail model failed: ${err.message || err}`);
@@ -253,6 +254,32 @@ export class AssetManager {
     for (const lv of loadedVariants) this.warnings.push(...lv.warnings.map((x) => `${e.id}/${lv.name}: ${x}`));
     this.warnings.push(...warnings.map((x) => `${e.id}: ${x}`));
     return this.loaded[e.target];
+  }
+
+  /**
+   * Alpha-carded foliage (photoscanned trees) thins out to dark speckles at
+   * distance when rendered with alphaTest + mipmaps. Dithered alpha hashing
+   * keeps the same cutout look up close but statistically preserves coverage
+   * in the far field, so canopies keep their mass and colour at any distance.
+   * Falls back to a lower alphaTest when alphaHash is unavailable.
+   */
+  _fixFoliage(m) {
+    if (!m || !m.map) return;
+    const isCutout = m.alphaTest > 0;
+    const isFoliageBlend = m.transparent && m.depthWrite;
+    if (!isCutout && !isFoliageBlend) return;
+    if ('alphaHash' in m) {
+      m.alphaHash = true;
+      m.alphaTest = 0;
+      m.transparent = false;
+      m.depthWrite = true;
+    } else {
+      m.alphaTest = Math.min(m.alphaTest || 0.5, 0.3);
+      m.transparent = false;
+      m.depthWrite = true;
+    }
+    m.side = THREE.DoubleSide;
+    m.needsUpdate = true;
   }
 
   /** Convenience for runtime / tests: load a single model URL as a one-variant asset. */

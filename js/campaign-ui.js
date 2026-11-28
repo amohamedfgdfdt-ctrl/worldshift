@@ -43,6 +43,7 @@ export class GameMode {
     this.save.useSlot('campaign');
     this.mode = 'campaign';
     this.events.setAutoEnabled?.(false);
+    if (this.events.setIntensity) this.events.setIntensity(1);
     try { localStorage.setItem(MODE_KEY, 'campaign'); } catch { /* ignore */ }
     this.eco.enforce = false;
     let resumed = false;
@@ -58,6 +59,7 @@ export class GameMode {
     this.save.useSlot('sandbox');
     this.mode = 'sandbox';
     this.events.setAutoEnabled?.(this.ui.settings?.get().disasters !== false);
+    if (this.events.setIntensity) this.events.setIntensity({ mild: 0.6, normal: 1, severe: 1.5 }[this.ui.settings?.get().evPower] || 1);
     try { localStorage.setItem(MODE_KEY, 'sandbox'); } catch { /* ignore */ }
     if (this.save.hasSave()) this.save.load(); else this.save.newWorld(DEFAULT_SEED);
     this.sim.setRunning(true);
@@ -156,11 +158,75 @@ export class GameMode {
     else if (a === 'mode') { this.closeScreen(); this.showModeScreen(); }
     else if (a === 'close') { this.closeScreen(); if (!this.campaign.run) { this.enterSandbox(); } }
     else if (a === 'resume') this.closeScreen();
-    else if (a === 'play') {
+    else if (a === 'play') { this._resume = null; this.showBriefing(b.dataset.id); }
+    else if (a === 'restart') {
       this._resume = null; const id = b.dataset.id;
-      this.closeScreen();
+      this.closeBriefing(); this.closeScreen();
       if (this.campaign.start(id)) this.ui.toast(t('toast.stage', { x: t(`st.${id}.name`) }), 'ok');
     }
+    else if (a === 'bstart') {
+      const id = this.briefId; this.closeBriefing(); this.closeScreen();
+      if (this.campaign.start(id)) this.ui.toast(t('toast.stage', { x: t(`st.${id}.name`) }), 'ok');
+    }
+    else if (a === 'bback') this.closeBriefing();
+  }
+
+  // ------------------------------------------------------------ pre-stage briefing
+  /** Short tutorial screen shown before a stage starts (AR + EN). */
+  showBriefing(id) {
+    const s = STAGES.find((x) => x.id === id); if (!s) return;
+    this.briefId = id;
+    let el = document.getElementById('cmp-brief');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'cmp-brief'; el.className = 'cmp-screen brief-screen';
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-a]'); if (!b) return;
+        this._stagesClick({ target: b });
+      });
+      this.app.appendChild(el);
+    }
+    el.hidden = false;
+    el.innerHTML = this._briefHtml(s);
+    el.scrollTop = 0;
+    el.querySelector('.brief-wrap')?.scrollTo?.(0, 0);
+  }
+
+  closeBriefing() {
+    const el = document.getElementById('cmp-brief');
+    if (el) { el.hidden = true; el.innerHTML = ''; }
+    this.briefId = null;
+  }
+
+  _briefHtml(s) {
+    const id = s.id, c = this.campaign, lang = i18n.lang;
+    const has = (k) => !!i18n.dict[lang]?.[k] || !!i18n.dict.en?.[k];
+    const sec = (key, ic) => {
+      const items = [];
+      for (let i = 0; has(`br.${id}.${key}.${i}`); i++) items.push(`<li>${t(`br.${id}.${key}.${i}`)}</li>`);
+      if (!items.length) return '';
+      return `<section class="brief-card ${key}"><h3>${icon(ic, 17)}<span>${t('br.' + key)}</span></h3><ul>${items.join('')}</ul></section>`;
+    };
+    const objs = s.objectives.map((o) => `<li class="${o.bonus ? 'bonus' : ''}"><span class="dot"></span><span>${c.label.call({ stageDef: s, _evType: (e) => s.events?.find((x) => x.id === e)?.type }, o)}${o.bonus ? `<span class="tag">${t('camp.bonus')}</span>` : ''}</span></li>`).join('');
+    const popT = Math.max(0, ...s.objectives.filter((o) => o.type === 'population').map((o) => o.n || 0));
+    // a house holds 4 residents; medium houses (8) are unlocked after stage 4
+    const cap = STAGES.indexOf(s) >= 4 ? 8 : 4;
+    const tip = `<p class="brief-math brief-tip">${t('br.tip')}</p>`;
+    const math = popT ? `<p class="brief-math">${t('br.math', { n: i18n.num(popT), h: i18n.num(Math.ceil(popT / cap)) })}</p>` : '';
+    const ev = (s.events || []).map((e) => `<span class="reward">${icon('wave', 15)}${t('ev.' + e.type)} · ${t('camp.day')} ${i18n.num(Math.floor(e.at / 24) + 1)}</span>`).join('');
+    return `<div class="brief-wrap">
+      <div class="brief-head"><span class="badge open">${t('camp.day')} ${i18n.num(STAGES.indexOf(s) + 1)}</span>
+        <h2>${t(`st.${id}.name`)}</h2>
+        <button class="icon-btn" data-a="bback" title="${t('br.back')}">${icon('x', 18)}</button></div>
+      <p class="brief-desc">${t(`st.${id}.desc`)}</p>
+      <div class="brief-grid">
+        ${sec('stab', 'heart')}${sec('food', 'wheat')}${sec('road', 'road')}
+        <section class="brief-card goals"><h3>${icon('target', 17)}<span>${t('br.goals')}</span></h3>
+          <ul class="obj-list">${objs}</ul>${math}${tip}${ev ? `<div class="rewards">${ev}</div>` : ''}</section>
+      </div>
+      <div class="brief-actions"><button class="btn primary" data-a="bstart">${icon('play', 16)} ${t('br.start')}</button>
+        <button class="btn" data-a="bback">${t('br.back')}</button></div>
+    </div>`;
   }
 
   // ------------------------------------------------------------ HUD
@@ -172,7 +238,7 @@ export class GameMode {
         <div class="pbar" style="margin-top:6px"><i id="trk-bar"></i></div><div class="objs" id="trk-objs"></div><div class="hintbox" id="trk-hint" hidden></div></div>
       <div class="actions"><button class="btn glass" data-a="stages">${icon('menu', 16)} ${t('camp.menu')}</button></div>`;
     this.app.appendChild(hud); this.hud = hud;
-    const lang = document.createElement('button'); lang.id = 'btn-lang'; lang.className = 'icon-btn'; lang.title = 'Language';
+    const lang = document.createElement('button'); lang.id = 'btn-lang'; lang.className = 'icon-btn'; lang.title = t('ui.lang'); lang.setAttribute('aria-label', t('ui.lang'));
     lang.onclick = () => i18n.toggle();
     const mode = document.createElement('button'); mode.id = 'btn-mode'; mode.className = 'icon-btn';
     mode.onclick = () => { this.showModeScreen(); };
@@ -188,10 +254,13 @@ export class GameMode {
 
   _relang() {
     this.langBtn.textContent = t('lang.toggle');
+    this.langBtn.title = t('ui.lang'); this.langBtn.setAttribute('aria-label', t('ui.lang'));
+    for (const [id, k] of [['btn-gfx', 'ui.gfxset'], ['btn-map', 'ui.worldmap'], ['btn-settings', 'ui.gamesettings'], ['rail', 'ui.categories']]) { const el = document.getElementById(id); if (el) { el.setAttribute('aria-label', t(k)); if (el.tagName === 'BUTTON') el.title = t(k); } }
     this.modeBtn.textContent = this.mode === 'campaign' ? t('mode.campaign') : t('mode.sandbox');
     this.modeBtn.title = t('mode.switch');
     const act = this.hud.querySelector('.actions .btn'); if (act) act.innerHTML = `${icon('menu', 16)} ${t('camp.menu')}`;
     this._ev = null; this._lastObj = ''; this.ui.rebuildLang?.();
+    if (this.briefId && !document.getElementById('cmp-brief')?.hidden) this.showBriefing(this.briefId);
     if (this.screen) { if (this._modeScreen && $('.mode-wrap', this.screen)) { this.showModeScreen(); } else if ($('#cmp-list')) { const id = this.selected, wasDetail = $('#cmp-body').classList.contains('detail'); const keep = this._resume; this.showStages(id); this._resume = keep; if (wasDetail) $('#cmp-body').classList.add('detail'); } }
   }
 
@@ -228,6 +297,7 @@ export class GameMode {
       ['energy', 'hud.energy', 'bolt', pct(s.energyProd, Math.max(s.energyDemand, 1)), s.energyDemand > 0 ? cls(s.esat) : '', `${n(s.energyProd)}`, `/ ${n(s.energyDemand)}`],
       ['funds', 'hud.funds', 'coin', 100, e.funds < 0 ? 'bad' : '', n(e.funds), `${s.net >= 0 ? '+' : '−'}${n(Math.abs(s.net))}${t('hud.perh')}`],
       ['stab', 'hud.stability', 'heart', e.stability, e.stability >= 70 ? '' : e.stability >= 40 ? 'warn' : 'bad', `${n(e.stability)}%`, `${t('hud.pop')} ${n(s.pop)}`],
+      ['traffic', 'hud.traffic', 'car', pct(s.cars, Math.max(1, this.world.traffic ? this.world.traffic.maxCars : 1)), s.houseAccess >= 0.6 ? '' : 'warn', n(s.cars), `${t('hud.access')} ${n(Math.round((s.houseAccess || 0) * 100))}%`],
     ];
     const row = $('#res-row');
     row.innerHTML = items.map(([k, lbl, ic, p, cl, v, sub]) => `<div class="res ${cl}" data-k="${k}"><div class="t">${icon(ic, 13)}${t(lbl)}</div><b>${v}</b><div class="bar"><i style="width:${p}%"></i></div><small>${sub}</small></div>`).join('');

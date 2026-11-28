@@ -10,22 +10,22 @@ export const PRESETS = {
   low: {
     fpsLimit: 30, shadowRes: 0, shadowQuality: 0, waterQuality: 0, reflectionQuality: 0,
     textureQuality: 0, aa: 'off', ao: 0, vegDensity: 0.4, foliageQuality: 0, renderScale: 0.75,
-    drawDistance: 0.55, terrainDetail: 0, post: 0, volumetric: 0, particles: 0.25,
+    drawDistance: 0.55, terrainDetail: 0, post: 0, volumetric: 0, particles: 0.25, traffic: 0,
   },
   medium: {
     fpsLimit: 60, shadowRes: 1024, shadowQuality: 1, waterQuality: 1, reflectionQuality: 0,
     textureQuality: 1, aa: 'fxaa', ao: 0, vegDensity: 0.7, foliageQuality: 1, renderScale: 1,
-    drawDistance: 0.75, terrainDetail: 1, post: 0, volumetric: 1, particles: 0.5,
+    drawDistance: 0.75, terrainDetail: 1, post: 0, volumetric: 1, particles: 0.5, traffic: 1,
   },
   high: {
     fpsLimit: 60, shadowRes: 2048, shadowQuality: 2, waterQuality: 2, reflectionQuality: 1,
     textureQuality: 2, aa: 'smaa', ao: 0, vegDensity: 0.9, foliageQuality: 2, renderScale: 1,
-    drawDistance: 1, terrainDetail: 2, post: 1, volumetric: 1, particles: 0.8,
+    drawDistance: 1, terrainDetail: 2, post: 1, volumetric: 1, particles: 0.8, traffic: 2,
   },
   ultra: {
     fpsLimit: 60, shadowRes: 4096, shadowQuality: 2, waterQuality: 3, reflectionQuality: 3,
     textureQuality: 2, aa: 'msaa', ao: 2, vegDensity: 1, foliageQuality: 2, renderScale: 1,
-    drawDistance: 1, terrainDetail: 2, post: 1, volumetric: 2, particles: 1,
+    drawDistance: 1, terrainDetail: 2, post: 1, volumetric: 2, particles: 1, traffic: 2,
   },
 };
 export const PRESET_ORDER = ['low', 'medium', 'high', 'ultra'];
@@ -59,6 +59,8 @@ export const SCHEMA = [
     { key: 'vegDensity', label: 'Vegetation density', type: 'range', min: 0.1, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
     { key: 'foliageQuality', label: 'Foliage quality', type: 'select', options: [[0, 'Static'], [1, 'Wind sway'], [2, 'Wind + tree shadows']] },
     { key: 'particles', label: 'Particle density', type: 'range', min: 0, max: 1, step: 0.05, fmt: (v) => Math.round(v * 100) + '%' },
+    { key: 'traffic', label: 'Traffic', type: 'select', options: [[0, 'Light · 8 cars'], [1, 'Normal · 18 cars'], [2, 'Busy · 30 cars']],
+      hint: 'How many vehicles drive at once. They are instanced, so the cost is small.' },
   ] },
   { group: 'Water', items: [
     { key: 'waterQuality', label: 'Water quality', type: 'select', options: [[0, 'Low · flat'], [1, 'Medium · ripples'], [2, 'High · waves + foam'], [3, 'Ultra · + caustics']],

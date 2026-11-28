@@ -130,6 +130,15 @@ export class UI {
     this.el.info.addEventListener('click', (e) => {
       if (e.target.closest('[data-info=close]')) tools.select(null);
       if (e.target.closest('[data-info=delete]')) tools.deleteSelected();
+      if (e.target.closest('[data-info=connect]') && tools.selection?.kind === 'building') {
+        const r = tools.connectBuilding(tools.selection.id);
+        const msg = r.ok ? tr('tool.connected', { n: i18n.num(r.built) })
+          : r.reason === 'already' ? tr('tool.alreadyconnected')
+            : r.reason === 'noroad' ? tr('tool.noroadnear') : tr('tool.roadfail');
+        this.toast(msg, r.ok ? 'ok' : 'warn');
+        this.renderInfo(tools.selection);
+        this.refreshStats();
+      }
     });
     this.el.info.addEventListener('input', (e) => {
       if (e.target.dataset.srcRate && tools.selection?.kind === 'source') {
@@ -167,6 +176,7 @@ export class UI {
     const rb = $('#btn-reset'); if (rb) { rb.title = tr('ui.reset.title'); const sp = rb.querySelector('span'); if (sp) sp.textContent = tr('ui.reset'); }
     const popChip = $('#stat-pop')?.closest('.chip'); if (popChip) { popChip.title = tr('hud.pop'); const l = popChip.querySelector('.lbl'); if (l) l.textContent = tr('hud.pop'); }
     const bldChip = $('#stat-bld')?.closest('.chip'); if (bldChip) { bldChip.title = tr('cat.buildings'); const l = bldChip.querySelector('.lbl'); if (l) l.textContent = tr('cat.buildings'); }
+    const carChip = $('#stat-cars')?.closest('.chip'); if (carChip) { carChip.title = tr('hud.cars'); const l = carChip.querySelector('.lbl'); if (l) l.textContent = tr('hud.cars'); }
     const stChip = $('#chip-status'); if (stChip) stChip.title = tr('ui.state');
     const lt = $('#load-text'); if (lt) lt.textContent = tr('ui.loading');
   }
@@ -212,12 +222,16 @@ export class UI {
     return `<div class="stack"><div class="top"><label>${label}</label><span class="val" data-val="${key}">${fmt(value)}</span></div>
       <input type="range" data-key="${key}" min="${min}" max="${max}" step="${step}" value="${value}"></div>`;
   }
+  _seg(key, label, opts, cur) {
+    return `<div class="stack"><div class="top"><label>${label}</label></div><div class="btn-row">${opts.map(([v, l]) => `<button class="btn ${v === cur ? 'primary' : ''}" data-act="seg" data-key="${key}" data-v="${v}">${l}</button>`).join('')}</div></div>`;
+  }
   _switch(key, label, on) {
     return `<div class="row"><label>${label}</label><button class="switch" role="switch" data-sw="${key}" aria-checked="${on}" aria-label="${label}"></button></div>`;
   }
 
   renderPanel() {
     const cat = CATEGORIES.find((c) => c.id === this.cat);
+    if (!cat) { this.cat = null; this.el.panel.classList.add('closed'); return; }
     const w = this.world, wp = w.water.params;
     let body = '';
     if (['buildings', 'nature', 'infrastructure'].includes(cat.id)) {
@@ -252,6 +266,12 @@ export class UI {
           ${this._slider('cloud', tr('p.cloud'), 0, 1, 0.05, s.cloud, (v) => `${Math.round(v * 100)}%`)}
           ${this._switch('grid', tr('p.grid'), s.grid)}
           ${this._switch('disasters', tr('p.disasters'), s.disasters !== false)}
+          ${this._seg('evFreq', tr('p.evfreq'), [['rare', tr('p.rare')], ['normal', tr('p.normal')], ['frequent', tr('p.frequent')]], s.evFreq || 'normal')}
+          ${this._seg('evPower', tr('p.evpower'), [['mild', tr('p.mild')], ['normal', tr('p.normal')], ['severe', tr('p.severe')]], s.evPower || 'normal')}
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn" data-act="ev-now" data-ev="rain">${tr('ev.rain')}</button><button class="btn" data-act="ev-now" data-ev="storm">${tr('ev.storm')}</button><button class="btn" data-act="ev-now" data-ev="drought">${tr('ev.drought')}</button>
+          </div>
+          <p class="help">${tr('help.evnow')}</p>
         </div>
         <div class="section"><h4>${tr('p.gfx')}</h4>
           <div class="kv"><span>${tr('p.preset')}</span><b id="ws-preset">–</b></div>
@@ -317,6 +337,12 @@ export class UI {
     if (!a) return;
     switch (a.dataset.act) {
       case 'close-panel': this.closePanel(); break;
+      case 'seg': this.settings.apply({ [a.dataset.key]: a.dataset.v }); this.renderPanel(); break;
+      case 'ev-now': {
+        if (this.gameMode?.inCampaign) { this.toast(tr('cost.locked'), 'warn'); break; }
+        const dur = { rain: 5, storm: 3, drought: 10 }[a.dataset.ev] || 5;
+        this.sim.events.start(a.dataset.ev, dur, 'manual'); this.save.markDirty(); break;
+      }
       case 'gfx': this.openGraphics?.(); break;
       case 'preview': this.closePanel(); this.openPreview?.(); break;
       case 'save': this.save.save(false); break;
@@ -368,6 +394,7 @@ export class UI {
       const b = bs.buildings.get(sel.id); if (!b) return;
       const t = TYPES[b.key];
       ic = t.icon; title = tr('b.' + t.key); sub = tr('cat.' + t.category); desc = tr('bd.' + t.key); del = true;
+      if (t.kind !== 'tree' && !bs.accessCell(b)) extra = `<button class="btn" data-info="connect">${icon('road', 16)}${tr('tool.connect')}</button>`;
     } else if (sel.kind === 'road') { ic = 'road'; title = tr('i.road'); sub = tr('cat.infrastructure'); desc = tr('i.road.d'); del = true; }
     else if (sel.kind === 'source') {
       const s = this.world.water.getSource(sel.id); if (!s) return;
@@ -396,6 +423,7 @@ export class UI {
       const t = TYPES[b.key];
       h += kv(tr('i.footprint'), `${b.w}×${b.d} cells · ${b.w * CELL}×${b.d * CELL} m`);
       h += kv(tr('i.elevation'), `${b.y.toFixed(1)} m`);
+      if (t.kind !== 'tree') { const acc = bs.accessCell(b); h += kv(tr('i.roadaccess'), acc ? tr('i.connected') : tr('i.notconnected'), acc ? 'good' : 'warn'); }
       if (t.kind === 'house') h += kv(tr('i.residents'), `${b.state.residents} / ${t.capacity}`, b.state.residents ? 'good' : '');
       if (t.kind === 'factory') h += kv(tr('i.jobs'), t.jobs);
       if (t.kind === 'tank') {
@@ -408,7 +436,13 @@ export class UI {
       if (t.solid !== false) { const fl = bs.floodInfo(b); h += kv(tr('i.flood'), tr('flood.' + fl.label), fl.depth > 0.5 ? 'bad' : fl.depth > 0.03 ? 'warn' : 'good'); }
       h += kv(tr('i.cell'), `${b.cx}, ${b.cz}`);
     } else if (sel.kind === 'road') {
-      h += kv(tr('i.elevation'), `${f.heightAt((sel.cx + 0.5) * CELL - N * CELL / 2, (sel.cz + 0.5) * CELL - N * CELL / 2).toFixed(1)} m`);
+      const ridx = sel.cz * N + sel.cx;
+      h += kv(tr('i.bridge'), bs.bridges.has(ridx) ? tr('i.yes') : tr('i.no'));
+      const lab = bs.net.label(sel.cx, sel.cz);
+      let size = 0;
+      if (lab >= 0) for (let k = 0; k < bs.net.labels.length; k++) if (bs.net.labels[k] === lab) size++;
+      h += kv(tr('i.roadnet'), i18n.num(size));
+      h += kv(tr('i.elevation'), `${bs.roadSurface(ridx).toFixed(1)} m`);
       h += kv(tr('i.cell'), `${sel.cx}, ${sel.cz}`);
     } else if (sel.kind === 'source') {
       const s = w.water.getSource(sel.id); if (!s) { this.tools.select(null); return; }
@@ -517,6 +551,8 @@ export class UI {
   refreshStats() {
     this.el.pop.textContent = this.world.buildings.population();
     this.el.bld.textContent = this.world.buildings.structureCount();
+    const cars = $('#stat-cars');
+    if (cars) cars.textContent = i18n.num(this.world.traffic ? this.world.traffic.count : 0);
   }
 
   update(dt) {

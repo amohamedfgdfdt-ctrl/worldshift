@@ -284,6 +284,7 @@ export class TerrainMesh {
     this.group = new THREE.Group();
     this.uniforms = {
       uDetail: { value: textures.detail },
+      uRock: { value: textures.rock || null },
       uCellTex: { value: null },
       uWaterTex: { value: null },
       uGrid: { value: 0 },
@@ -356,12 +357,13 @@ export class TerrainMesh {
       Object.assign(shader.uniforms, u);
       injectAtmosphere(shader);
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWorldP;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorldP = position;');
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWorldP;\nvarying float vSlope;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorldP = position;\nvSlope = 1.0 - normalize(normal).y;');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>
 varying vec3 vWorldP;
-uniform sampler2D uDetail; uniform sampler2D uCellTex; uniform sampler2D uWaterTex;
+varying float vSlope;
+uniform sampler2D uDetail; uniform sampler2D uRock; uniform sampler2D uCellTex; uniform sampler2D uWaterTex;
 uniform float uDetailLvl; uniform float uWaterQ;
 uniform float uGrid; uniform vec2 uCursor; uniform float uCursorR; uniform float uTime;
 const float CELLW = ${CELL.toFixed(1)};
@@ -377,6 +379,16 @@ const float NC = ${N.toFixed(1)};`)
   float rich = full * (0.82 + 0.36 * fine);
   float basic = 0.85 + 0.15 * d2;
   diffuseColor.rgb *= uDetailLvl < 0.5 ? basic : (uDetailLvl < 1.5 ? full : rich);
+  // Rock035 photo detail on steep slopes: real rock grain instead of flat grey
+  {
+    float rockW2 = smoothstep(0.40, 0.72, vSlope) * (uDetailLvl < 0.5 ? 0.55 : 1.0);
+    if (rockW2 > 0.003) {
+      float rt1 = texture2D(uRock, wp * 0.043).r;
+      float rt2 = texture2D(uRock, wp * 0.0095 + 0.53).r;
+      float rockM = 0.45 + 0.55 * rt1 * (0.6 + 0.55 * rt2);
+      diffuseColor.rgb *= mix(1.0, rockM, rockW2 * 0.85);
+    }
+  }
   vec2 wtuv = (((wp + HALFW) / (CELLW * NC)) * NC + 0.5) / (NC + 1.0);
   float wd = texture2D(uWaterTex, wtuv).g * 6.0;
   float wet = smoothstep(0.0, 0.04, wd);

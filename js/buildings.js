@@ -176,6 +176,10 @@ function farm() {
     b.box(0.07, 0.07, 9.0, x, 0.8, -0.9, hex(0x8a6a45));
     b.box(0.07, 0.07, 9.0, x, 0.45, -0.9, hex(0x8a6a45));
   }
+  // hay bales, water trough and a small coop beside the barn (inside the same 4x4 footprint)
+  for (const [x, z] of [[1.2, 4.3], [1.2, 3.4], [2.0, 3.9]]) b.cyl(0.42, 0.42, 0.8, x, 0.22, z, hex(0xd8b955), { seg: 10, rz: Math.PI / 2 });
+  b.box(1.8, 0.3, 0.45, -3.2, 0.2, 4.6, hex(0x7a5a38)); b.box(1.6, 0.1, 0.3, -3.2, 0.46, 4.6, hex(0x4f8cb8));
+  b.box(0.9, 0.6, 0.7, -0.6, 0.2, 4.7, hex(0xb5472f)); b.gable(1.1, 0.4, 0.9, -0.6, 0.8, 4.7, hex(0x4a4540));
   // scarecrow
   b.cyl(0.05, 0.05, 1.7, -1.0, 0.2, -2.3, hex(0x6d4f33), { seg: 6 });
   b.box(1.1, 0.07, 0.07, -1.0, 1.4, -2.3, hex(0x6d4f33));

@@ -83,7 +83,8 @@ export class AssetPreview {
   // ------------------------------------------------------------------ building the stage
   async _build() {
     this._dispose();
-    const entries = this.assets.entries;
+    const pvOnly = new URLSearchParams(location.search).get('pv');
+    const entries = pvOnly ? this.assets.entries.filter((e) => e.id === pvOnly || e.target === pvOnly) : this.assets.entries;
     const ZS = 16;
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x5b6b4a, roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; this.stage.add(ground);

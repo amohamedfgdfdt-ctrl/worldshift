@@ -14,6 +14,7 @@ export class Tutorial {
       { id: 'welcome' },
       { id: 'hud', sel: '.stats' },
       { id: 'build', sel: '[data-cat="buildings"]', open: 'buildings', wait: 'house' },
+      { id: 'roads', sel: '[data-cat="infrastructure"]', open: 'infrastructure' },
       { id: 'water', sel: '[data-cat="infrastructure"]', open: 'infrastructure', wait: 'tank' },
       { id: 'food', sel: '[data-cat="nature"]', open: 'nature' },
       { id: 'energy', sel: '[data-cat="infrastructure"]' },

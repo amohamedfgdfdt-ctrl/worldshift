@@ -14,6 +14,7 @@ import { Emitter } from './utils.js';
 import { updateAtmosphere } from './atmosphere.js';
 import { Rain } from './rain.js';
 import { Life } from './life.js';
+import { Traffic } from './traffic.js';
 import { NightLights } from './night-lights.js';
 import { RenderPipeline } from './pipeline.js';
 import { Particles } from './particles.js';
@@ -66,6 +67,7 @@ export class World extends Emitter {
 
     this.boundary = new WorldBoundary(this.scene, this.field, this.textures);
     this.env = new Environment(this.scene, { cloudOctaves: isTouchDevice ? 3 : 4, shadowSize: QUALITY[this.quality].shadow || 1024 });
+    this._loadHDRI();
     this.rig = new CameraRig(canvas.clientWidth / Math.max(1, canvas.clientHeight), this.field);
     this.rig.groundAt = (x, z) => this.boundary.heightAt(x, z);
 
@@ -77,6 +79,7 @@ export class World extends Emitter {
     this.nightLights = new NightLights(this.scene, this.buildings);
     this.rain = new Rain(this.scene);
     this.life = new Life(this);
+    this.traffic = new Traffic(this);
 
     // data textures read by the terrain shader
     this.cellData = new Uint8Array(N * N * 4);
@@ -96,10 +99,26 @@ export class World extends Emitter {
     this._frames = 0;
   }
 
+  /** Image-based lighting from a real sky (Poly Haven CC0 HDRI). Loads async;
+   *  on any failure the light rig alone is used, so the game never breaks. */
+  async _loadHDRI() {
+    if (new URLSearchParams(location.search).has('noenv')) return;   // dev capture toggle
+    try {
+      const { RGBELoader } = await import('../vendor/jsm/loaders/RGBELoader.js');
+      const tex = await new RGBELoader().loadAsync(new URL('../assets/env/autumn_field_puresky_1k.hdr', import.meta.url).href);
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      const envMap = pm.fromEquirectangular(tex).texture;
+      tex.dispose(); pm.dispose();
+      this.scene.environment = envMap;
+      if (this.env) this.env.hasHDRI = true;
+    } catch (e) { window.__envErr = String((e && e.message) || e); /* keep procedural lighting only */ }
+  }
+
   /** (Re)generate a whole world from a seed. Buildings are removed. */
   build(seed = this.seed) {
     this.seed = seed >>> 0;
     this.buildings.clearAll();
+    this.traffic?.clear();
     this.field.generate(this.seed);
     this.terrain.refresh();
     this.boundary.refresh();
@@ -112,6 +131,7 @@ export class World extends Emitter {
       return f.initialWater[j * VERTS + i];
     });
     this.buildings.placeSource(f.riverSource.i, f.riverSource.j, 8, 1);
+    this.buildings.recalcBridges();
     this.rig.reset(true);
     this.refreshWaterTexture();
     this.refreshCellTexture();
@@ -156,6 +176,8 @@ export class World extends Emitter {
     }
     this.env.sun.shadow.radius = [1, 2, 3][g.shadowQuality] ?? 2;
     this.buildings.setShadows(shadowOn);
+    this.traffic?.setShadows(shadowOn);
+    this.traffic?.setDensity(g.traffic ?? 1);
     this.vegetation.setShadows(shadowOn && g.foliageQuality >= 2);
     // --- vegetation
     this.vegetation.setDensity(g.vegDensity);
@@ -264,6 +286,7 @@ export class World extends Emitter {
     windUniforms.uWind.value = this.gfx.foliageQuality > 0 ? this.wind * (ev?.type === 'storm' ? 1.8 : 1) : 0;
     this.rain.update(dt, ev && ev.type !== 'drought' ? (ev.type === 'storm' ? 1 : 0.55) : 0, this.rig.cur.target, this.wind);
     this.life.update(dt, sim);
+    this.traffic.update(dt, sim);
     this.scene.fog.density = this.env.fogDensityBase ?? 0.0014;
     this.rig.camera.updateMatrixWorld();
     updateAtmosphere(this.rig.camera, this.env, this.gfx.volumetric);

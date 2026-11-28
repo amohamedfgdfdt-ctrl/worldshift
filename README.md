@@ -128,3 +128,13 @@ WORLDSHIFT لعبة محاكاة عالم ثلاثية الأبعاد تتيح �
 - إذا واجهت مشكلة، سجّل المرحلة التي كنت تلعبها، ونمط اللعب، وإعداد الرسوميات، ووصفًا مختصرًا لما حدث.
 
 **شكرًا لتجربة WORLDSHIFT ومساهمتك في تطوير عالمها!**
+
+
+## Merge round (v3u): sandbox disaster controls, Arabic fixes, farm detail
+- World panel (Sandbox): disaster frequency (rare/normal/frequent), strength (mild/normal/severe) and "start now" buttons for rain, storm and drought. Strength really scales the water simulation. The campaign ignores these settings and always runs its scripted events at strength 1.
+- On-screen chip with the active disaster or the countdown to the warned one; lightning flashes during storms and a warm haze during drought (visual only).
+- Arabic: fixed raw keys in the Graphics panel (Traffic), and the Language / Graphics / World map / Game settings / Categories labels now follow the language. The Asset preview developer tool stays English.
+- Farm model: hay bales, water trough and a small coop added inside the same 4x4 footprint. Gameplay footprint unchanged.
+
+### Stage 8 start funds (user-approved balance change)
+Stage 8 start funds changed from 8000 to 10000. The user approved it in WhatsApp (reply "موافق" at 2:08 PM, Nov 28, to the question about raising it 8000 to 10000). Only `env.funds` of stage 8 changed.

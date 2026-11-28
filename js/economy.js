@@ -20,6 +20,7 @@ export const ECON = {
   wind_turbine:  { cost: 600, upkeep: 2, windBase: 8, windGain: 28 },
   tree:          { cost: 5, upkeep: 0 },
   road:          { cost: 8, upkeep: 0 },
+  bridge:        { cost: 40, upkeep: 0 },   // a road tile that has to span water
   source:        { cost: 150, upkeep: 0 },   // water source (Campaign: costs funds, strength capped at 10)
 };
 export const RATES = {
@@ -41,7 +42,7 @@ export class Economy extends Emitter {
     this.stability = 75;
     this.acc = 0;
     this.s = this._empty();         // last computed snapshot (rates, satisfaction)
-    this.stats = { minStability: 100, elapsedGh: 0, flooded: 0 };
+    this.stats = { minStability: 100, elapsedGh: 0, flooded: 0, trips: 0 };
   }
 
   _empty() {
@@ -52,12 +53,14 @@ export class Economy extends Emitter {
       energyProd: 0, energyDemand: 0, esat: 1, solar: 0, wind: 0,
       income: 0, upkeep: 0, tax: 0, net: 0,
       flooded: 0, floodFrac: 0, farmsGood: 0, poweredFactories: 0, counts: {},
+      connectedHouses: 0, connectedFactories: 0, connectedFarms: 0, connected: 0,
+      housePop: 0, jobsConnected: 0, workersConnected: 0, houseAccess: 0, cars: 0, tripRate: 0,
     };
   }
 
   reset({ funds = 0, food = 0 } = {}) {
     this.funds = funds; this.food = food; this.stability = 75; this.acc = 0;
-    this.stats = { minStability: 100, elapsedGh: 0, flooded: 0 };
+    this.stats = { minStability: 100, elapsedGh: 0, flooded: 0, trips: 0 };
     this.s = this._empty();
     this.refresh();
   }
@@ -77,6 +80,7 @@ export class Economy extends Emitter {
     const windF = clamp((w.wind ?? 0.6) / 1.6, 0, 1);
     const work = hour >= 7 && hour < 19, evening = hour >= 18 || hour < 6;
     let floodedHouses = 0;
+    // road access is measured once per building and drives growth, output and traffic
     for (const b of bs.buildings.values()) {
       const e = ECON[b.key]; if (!e) continue;
       s.counts[b.key] = (s.counts[b.key] || 0) + 1;
@@ -87,11 +91,20 @@ export class Economy extends Emitter {
       if (e.solar) s.solar += e.solar * sun;
       if (e.windBase !== undefined) s.wind += e.windBase + e.windGain * windF;
       const t = TYPES[b.key];
+      const linked = t.kind === 'tree' ? false : !!bs.accessCell(b);
+      if (linked) s.connected++;
       if (t.kind === 'house') {
         s.pop += b.state.residents; s.houses++;
+        if (linked) { s.connectedHouses++; s.housePop += b.state.residents; }
         if (bs.floodInfo(b).depth > 0.5) floodedHouses++;
-      } else if (t.kind === 'factory') s.jobs += e.jobs;
+      } else if (t.kind === 'factory') {
+        s.jobs += e.jobs;
+        if (linked) { s.jobsConnected += e.jobs; s.connectedFactories++; }
+      } else if (t.kind === 'farm') {
+        if (linked) s.connectedFarms++;
+      }
     }
+    s.houseAccess = s.houses ? s.connectedHouses / s.houses : 0;
     s.energyProd = s.solar + s.wind;
     s.esat = s.energyDemand <= 0 ? 1 : Math.min(1, s.energyProd / s.energyDemand);
     const eEff = !this.enforce || this.needs.has('energy') ? s.esat : 1;     // Campaign teaches power in stage 4
@@ -106,7 +119,8 @@ export class Economy extends Emitter {
       const ir = bs.irrigation(b);
       if (ir.label !== 'None nearby') s.farmsGood++;
       const flooded = bs.floodInfo(b).depth > 0.5;
-      s.foodProd += flooded ? 0 : ECON.farm.food * (IRR[ir.label] ?? 0.12) * (0.6 + 0.4 * eEff);
+      const road = bs.accessCell(b) ? 1 : 0.6;      // no road: produce spoils on the way to town
+      s.foodProd += flooded ? 0 : ECON.farm.food * (IRR[ir.label] ?? 0.12) * (0.6 + 0.4 * eEff) * road;
     }
     s.foodCap = cap; s.foodStock = this.food;
     s.foodDemand = s.pop * RATES.foodPerResident;
@@ -114,11 +128,15 @@ export class Economy extends Emitter {
     const need = (d) => Math.max(1e-9, d * (gh || 1 / 20));
     s.wsat = s.waterDemand <= 0 ? 1 : clamp(s.waterStock / need(s.waterDemand), 0, 1);
     s.fsat = s.foodDemand <= 0 ? 1 : clamp((this.food + s.foodProd * (gh || 1 / 20)) / need(s.foodDemand), 0, 1);
-    // economy
+    // economy: only factories on the road network can ship, and only workers who
+    // can drive in from a connected home count towards the shift
     s.workers = Math.min(s.jobs, Math.round(s.pop * RATES.workShare));
-    const fill = s.jobs ? s.workers / s.jobs : 0;
-    s.poweredFactories = (s.counts.factory_small || 0) * (fill > 0.5 && eEff > 0.5 ? 1 : 0);
-    s.income = (s.counts.factory_small || 0) * ECON.factory_small.output * fill * eEff;
+    s.workersConnected = Math.min(s.jobsConnected, Math.round(s.housePop * RATES.workShare));
+    const fill = s.jobsConnected ? Math.min(1, s.workersConnected / s.jobsConnected) : 0;
+    s.poweredFactories = s.connectedFactories * (fill > 0.5 && eEff > 0.5 ? 1 : 0);
+    s.income = s.connectedFactories * ECON.factory_small.output * fill * eEff;
+    s.cars = w.traffic ? w.traffic.count : 0;
+    s.tripRate = w.traffic ? w.traffic.tripRate : 0;
     s.tax = s.pop * 1.5 * (0.5 + 0.5 * this.stability / 100);
     s.net = s.income + s.tax - s.upkeep;
     s.flooded = floodedHouses;
@@ -186,6 +204,7 @@ export class EventSystem extends Emitter {
     this._rng = 1;
     this._t = 0;                  // game hours since boot (drives the auto scheduler)
     // Automatic disasters (sandbox): random gaps, weighted by current weather, warned ahead.
+    this.intensity = 1;           // sandbox setting: scales rain/storm strength and drought depth (campaign stays at 1)
     this.auto = { enabled: false, minGap: 10, maxGap: 28, warn: 3, nextAt: Infinity, warned: false, nextType: 'rain', nextDur: 5, seq: 0 };
   }
 
@@ -228,8 +247,10 @@ export class EventSystem extends Emitter {
     if (this.active) this.stop(false);
     const d = EVENT_TYPES[type]; if (!d) return false;
     const wp = this.world.water.params;
-    wp.sourceRate *= d.rate;
-    this.active = { type, id, remaining: hours, total: hours, mult: d.rate };
+    const I = this.intensity || 1;
+    const mult = d.rate >= 1 ? 1 + (d.rate - 1) * I : Math.max(0.05, 1 - (1 - d.rate) * Math.min(I, 1.3));
+    wp.sourceRate *= mult;
+    this.active = { type, id, remaining: hours, total: hours, mult, k: I };
     this.economy.shock(d.shock);
     this.emit('start', this.active);
     return true;
@@ -243,6 +264,14 @@ export class EventSystem extends Emitter {
     this.emit('end', a);
   }
 
+  /** Sandbox: how often automatic events come ('rare' | 'normal' | 'frequent') and how strong they are (0.5 to 1.6). */
+  setFrequency(f) {
+    const g = { rare: [20, 56], normal: [10, 28], frequent: [5, 14] }[f] || [10, 28];
+    this.auto.minGap = g[0]; this.auto.maxGap = g[1];
+    if (isFinite(this.auto.nextAt)) this._scheduleNext();
+  }
+  setIntensity(k) { this.intensity = Math.min(1.6, Math.max(0.5, +k || 1)); }
+
   /** Hard-stop an active event and silence the scheduler (campaign takes over). */
   setAutoEnabled(on) {
     this.auto.enabled = !!on;
@@ -254,7 +283,7 @@ export class EventSystem extends Emitter {
     const a = this.active; if (!a) return;
     const gh = gameMinutes / 60, d = EVENT_TYPES[a.type];
     const w = this.world.water;
-    const per = d.volume * gh / d.spots;
+    const per = d.volume * (a.k || 1) * gh / d.spots;
     for (let i = 0; i < d.spots; i++) {
       const x = (this._rand() * 2 - 1) * (HALF - 12), z = (this._rand() * 2 - 1) * (HALF - 12);
       w.addVolume(x, z, 18, per);

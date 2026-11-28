@@ -76,6 +76,27 @@
           "dimensions": {
             "height": 8.5
           }
+        },
+        {
+          "name": "jacaranda_real",
+          "weight": 0.4,
+          "url": "models/vegetation/trees/jacaranda_tree.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "jacaranda_tree",
+            "pack": "Poly Haven",
+            "packUrl": "https://polyhaven.com/a/jacaranda_tree",
+            "author": "Poly Haven",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "jacaranda_tree_1k.gltf",
+            "sha256": "9f7e4211cdca2d76eecfcfdd9a61592c076b5261da2bb7f3573b92fda8051246",
+            "bytes": 8135664,
+            "note": "Photoscanned jacaranda in bloom, decimated to ~13k tris (LOD0), 1K PBR textures"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 12.0
+          }
         }
       ],
       "enabled": true,
@@ -147,6 +168,27 @@
           "dimensions": {
             "height": 8.0
           }
+        },
+        {
+          "name": "broadleaf_real",
+          "weight": 0.4,
+          "url": "models/vegetation/trees/tree_small_02.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "tree_small_02",
+            "pack": "Poly Haven",
+            "packUrl": "https://polyhaven.com/a/tree_small_02",
+            "author": "Poly Haven",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "tree_small_02_1k.gltf",
+            "sha256": "9bf7f8b4b83d17204bee61e1de30df9497c2d9755ac66d64ac6d2ff73db89da6",
+            "bytes": 6357884,
+            "note": "Photoscanned small broadleaf tree, decimated to ~11k tris (LOD0), 1K PBR textures"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 6.5
+          }
         }
       ],
       "enabled": true,
@@ -217,6 +259,27 @@
           "fit": "height",
           "dimensions": {
             "height": 10.0
+          }
+        },
+        {
+          "name": "fir_real",
+          "weight": 0.45,
+          "url": "models/vegetation/trees/fir_tree_01.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "fir_tree_01",
+            "pack": "Poly Haven",
+            "packUrl": "https://polyhaven.com/a/fir_tree_01",
+            "author": "Poly Haven",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "fir_tree_01_1k.gltf",
+            "sha256": "ef3e73c557a7a19efe5c83c9d5d5550b32812f2d917cf11f7d25c86b6e03030c",
+            "bytes": 9779520,
+            "note": "Photoscanned European fir, decimated to ~11k tris (LOD0), 1K PBR textures"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 14.0
           }
         }
       ],
@@ -474,6 +537,48 @@
             "note": "AI-generated low-poly asset"
           },
           "scale": 0.55
+        },
+        {
+          "name": "rock_real_a",
+          "weight": 0.3,
+          "url": "models/environment/rocks/rock_07.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "rock_07",
+            "pack": "Poly Haven",
+            "packUrl": "https://polyhaven.com/a/rock_07",
+            "author": "Poly Haven",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "rock_07_1k.gltf",
+            "sha256": "3d72f96f5899113fbb886d01951861cc65b9da60fd88f469a5e664e66e659f97",
+            "bytes": 2002916,
+            "note": "Photoscanned rock, decimated to ~5k tris (LOD0), 1K PBR textures"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 1.0
+          }
+        },
+        {
+          "name": "rock_real_b",
+          "weight": 0.25,
+          "url": "models/environment/rocks/stone_01.glb",
+          "pivot": "base-center",
+          "source": {
+            "name": "stone_01",
+            "pack": "Poly Haven",
+            "packUrl": "https://polyhaven.com/a/stone_01",
+            "author": "Poly Haven",
+            "license": "CC0 1.0 Universal",
+            "sourceFile": "stone_01_1k.gltf",
+            "sha256": "4e1d757a1a806bf1ac39c85d6b7a0182421148302aab4ecfadad8afaf841020e",
+            "bytes": 2651600,
+            "note": "Photoscanned stone, decimated to ~3.3k tris (LOD0), 1K PBR textures"
+          },
+          "fit": "height",
+          "dimensions": {
+            "height": 0.8
+          }
         }
       ],
       "enabled": true,

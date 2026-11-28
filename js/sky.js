@@ -62,8 +62,8 @@ void main() {
 
 // keyframes in sRGB, keyed by sun elevation (sin of angle)
 const KEYS = [
-  { e: -0.35, hor: [0.07, 0.09, 0.18], zen: [0.015, 0.03, 0.09] },
-  { e: -0.10, hor: [0.16, 0.15, 0.28], zen: [0.03, 0.05, 0.14] },
+  { e: -0.35, hor: [0.13, 0.16, 0.27], zen: [0.03, 0.055, 0.13] },
+  { e: -0.10, hor: [0.22, 0.22, 0.36], zen: [0.05, 0.08, 0.19] },
   { e: 0.00, hor: [0.96, 0.52, 0.30], zen: [0.20, 0.28, 0.55] },
   { e: 0.10, hor: [0.90, 0.74, 0.62], zen: [0.26, 0.42, 0.76] },
   { e: 0.35, hor: [0.70, 0.82, 0.95], zen: [0.22, 0.46, 0.88] },
@@ -166,7 +166,7 @@ export class Environment {
     const moon = e < -0.03;
     const sunI = 3.6 * smoothstep(-0.04, 0.3, e);
     // brighter, cooler moonlight so terrain, trees, buildings and water stay readable
-    const moonI = 2.1 * smoothstep(0.0, -0.32, e);
+    const moonI = 3.0 * smoothstep(0.0, -0.32, e);
     const L = this.sun;
     if (moon) {
       L.color.setRGB(0.6, 0.7, 1.0);
@@ -183,8 +183,15 @@ export class Environment {
     // subtle blue-toned ambient at night: shadowed slopes stay readable, never pitch black
     this.hemi.color.lerp(new THREE.Color(0.38, 0.48, 0.78), nightAmt * 0.55);
     this.hemi.groundColor.setRGB(0.20, 0.17, 0.12).multiplyScalar(0.4 + 0.6 * dayAmt);
-    this.hemi.groundColor.lerp(new THREE.Color(0.10, 0.12, 0.22), nightAmt * 0.7);
-    this.hemi.intensity = lerp(0.85, 1.05, dayAmt);
+    this.hemi.groundColor.lerp(new THREE.Color(0.15, 0.18, 0.30), nightAmt * 0.7);
+    // night floor lifted so slopes facing away from the moon never read as void
+    this.hemi.intensity = lerp(2.0, 1.08, dayAmt);
+    // image-based sky lighting (when the HDRI loaded): carries natural sky bounce,
+    // so the analytic hemisphere light is eased back to avoid double-lighting
+    if (this.hasHDRI && this.scene.environment) {
+      this.scene.environmentIntensity = lerp(0.30, 0.75, dayAmt);
+      this.hemi.intensity *= 0.75;
+    }
 
     // fog follows horizon colour
     this.scene.fog.color.copy(horizon).lerp(new THREE.Color(0.5, 0.6, 0.75), 0.15 * dayAmt);
@@ -203,7 +210,7 @@ export class Environment {
     L.target.updateMatrixWorld();
 
     const moonAmt = moon ? smoothstep(0.0, -0.32, e) : 0;
-    Object.assign(this.state, { dayAmt, nightAmt, moonAmt, elevation: e, lightAmt: lerp(0.12, 1, dayAmt) });
+    Object.assign(this.state, { dayAmt, nightAmt, moonAmt, elevation: e, lightAmt: lerp(0.24, 1, dayAmt) });
     this.state.horizon.copy(horizon); this.state.zenith.copy(zenith); this.state.sunColor.copy(sunColor);
     return this.state;
   }
@@ -224,6 +231,6 @@ export class Environment {
     wu.uZenith.value.copy(s.zenith);
     wu.uFogColor.value.copy(this.scene.fog.color);
     wu.uFogDensity.value = this.scene.fog.density;
-    wu.uLight.value = lerp(0.45, 1, s.dayAmt);
+    wu.uLight.value = lerp(0.62, 1, s.dayAmt);
   }
 }

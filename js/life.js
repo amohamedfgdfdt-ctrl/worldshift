@@ -11,36 +11,64 @@ const DAY_START = 6.2, DAY_END = 20;
 const TINTS = [0xcfd8ea, 0xe8b8b0, 0xb8d8b0, 0xe8ddb0, 0xd0c0e0, 0xf0e8da];
 
 function personGeometry() {
+  // ~1.4 m villager: same silhouette and budget class as the original box model,
+  // but with tapered limbs, joints and a rounded head so close-ups read as a person
   const b = new ModelBuilder();
-  b.box(0.15, 0.5, 0.15, -0.1, 0, 0, hex(0x4a5470));
-  b.box(0.15, 0.5, 0.15, 0.1, 0, 0, hex(0x4a5470));
-  b.box(0.36, 0.55, 0.22, 0, 0.5, 0, hex(0xe8e2d8));               // shirt (tinted per instance)
-  b.blob(0.14, 0, 1.18, 0, hex(0xd9a680), { detail: 0, lump: 0.02 });
-  b.box(0.2, 0.08, 0.2, 0, 1.3, 0, hex(0x33241a));                  // hair
+  const skin = hex(0xd9a680), shirt = hex(0xe8e2d8), pants = hex(0x4a5470), hair = hex(0x33241a), shoe = hex(0x2c2620);
+  b.box(0.15, 0.07, 0.24, -0.1, 0, 0.03, shoe);                       // shoes
+  b.box(0.15, 0.07, 0.24, 0.1, 0, 0.03, shoe);
+  b.cyl(0.07, 0.088, 0.55, -0.1, 0.05, 0, pants, { seg: 8 });        // legs (tapered)
+  b.cyl(0.07, 0.088, 0.55, 0.1, 0.05, 0, pants, { seg: 8 });
+  b.cyl(0.165, 0.20, 0.52, 0, 0.55, 0, shirt, { seg: 10 });          // torso (tinted per instance)
+  b.cyl(0.042, 0.05, 0.40, -0.235, 0.62, 0, shirt, { seg: 7, rz: 0.14 });   // arms, slightly out
+  b.cyl(0.042, 0.05, 0.40, 0.235, 0.62, 0, shirt, { seg: 7, rz: -0.14 });
+  b.blob(0.048, -0.27, 0.56, 0, skin, { detail: 0, lump: 0.02 });    // hands
+  b.blob(0.048, 0.27, 0.56, 0, skin, { detail: 0, lump: 0.02 });
+  b.cyl(0.05, 0.055, 0.09, 0, 1.04, 0, skin, { seg: 8 });            // neck
+  b.blob(0.135, 0, 1.21, 0, skin, { detail: 1, lump: 0.02, jitter: 0 });  // head
+  b.blob(0.14, 0, 1.27, -0.015, hair, { detail: 1, lump: 0.03, sy: 0.62, jitter: 0 });  // hair cap
   return b.build();
 }
 function cowGeometry() {
   const b = new ModelBuilder();
-  for (const [x, z] of [[-0.32, -0.18], [0.32, -0.18], [-0.32, 0.18], [0.32, 0.18]]) b.box(0.11, 0.42, 0.11, x, 0, z, hex(0x40332a));
-  b.box(0.95, 0.55, 0.5, 0, 0.42, 0, hex(0xe6e0d6));
-  b.box(0.4, 0.3, 0.51, -0.15, 0.55, 0, hex(0x6b4d33));             // patch
-  b.box(0.3, 0.32, 0.28, 0, 0.6, 0.42, hex(0x806147));              // head
+  const hide = hex(0xe6e0d6), dark = hex(0x40332a), patch = hex(0x6b4d33), muzzle = hex(0xc9a68c), horn = hex(0xd8cdb8);
+  for (const [x, z] of [[-0.32, -0.18], [0.32, -0.18], [-0.32, 0.18], [0.32, 0.18]])
+    b.cyl(0.045, 0.06, 0.46, x, 0, z, dark, { seg: 7 });             // legs
+  b.box(0.95, 0.55, 0.5, 0, 0.42, 0, hide, { jitter: 0.04 });        // body
+  b.box(0.4, 0.3, 0.51, -0.15, 0.55, 0, patch, { jitter: 0.05 });    // patch
+  b.box(0.3, 0.3, 0.3, 0, 0.62, 0.42, hex(0x806147));                // head
+  b.box(0.22, 0.14, 0.16, 0, 0.58, 0.58, muzzle);                    // muzzle
+  b.box(0.1, 0.06, 0.16, -0.2, 0.82, 0.4, patch, { rz: 0.5 });       // ears
+  b.box(0.1, 0.06, 0.16, 0.2, 0.82, 0.4, patch, { rz: -0.5 });
+  b.cone(0.03, 0.14, -0.1, 0.9, 0.42, horn, { seg: 6 });             // horns
+  b.cone(0.03, 0.14, 0.1, 0.9, 0.42, horn, { seg: 6 });
+  b.cyl(0.02, 0.03, 0.4, 0, 0.5, -0.28, dark, { seg: 6, rx: 0.5 });  // tail
+  b.blob(0.09, 0, 0.34, -0.12, hex(0xd9b8a8), { detail: 0, lump: 0.03 });  // udder
   return b.build();
 }
 function sheepGeometry() {
   const b = new ModelBuilder();
-  for (const [x, z] of [[-0.2, -0.13], [0.2, -0.13], [-0.2, 0.13], [0.2, 0.13]]) b.box(0.08, 0.3, 0.08, x, 0, z, hex(0x332e29));
-  b.blob(0.34, 0, 0.52, 0, hex(0xf0ebde), { detail: 0, lump: 0.06 });
-  b.box(0.16, 0.18, 0.18, 0, 0.42, 0.34, hex(0x38332e));
+  const wool = hex(0xf0ebde), face = hex(0x38332e), leg = hex(0x332e29);
+  for (const [x, z] of [[-0.2, -0.13], [0.2, -0.13], [-0.2, 0.13], [0.2, 0.13]])
+    b.cyl(0.032, 0.042, 0.34, x, 0, z, leg, { seg: 6 });
+  b.blob(0.36, 0, 0.56, 0, wool, { detail: 1, lump: 0.09 });         // fleece
+  b.blob(0.13, 0, 0.5, 0.36, face, { detail: 1, lump: 0.03 });       // head
+  b.box(0.05, 0.04, 0.12, -0.1, 0.56, 0.38, face, { rz: 0.6 });      // ears
+  b.box(0.05, 0.04, 0.12, 0.1, 0.56, 0.38, face, { rz: -0.6 });
+  b.blob(0.07, 0, 0.62, -0.32, wool, { detail: 0, lump: 0.05 });     // tail puff
   return b.build();
 }
 function chickenGeometry() {
   const b = new ModelBuilder();
-  b.box(0.05, 0.14, 0.05, -0.05, 0, 0, hex(0xcc9933));
-  b.box(0.05, 0.14, 0.05, 0.05, 0, 0, hex(0xcc9933));
-  b.box(0.2, 0.18, 0.26, 0, 0.14, 0, hex(0xeee6d9));
-  b.box(0.1, 0.12, 0.1, 0, 0.32, 0.14, hex(0xeee6d9));
-  b.box(0.06, 0.06, 0.06, 0, 0.44, 0.14, hex(0xcc261a));            // comb
+  const feather = hex(0xeee6d9), legC = hex(0xcc9933), comb = hex(0xcc261a), beak = hex(0xe8963a);
+  b.cyl(0.014, 0.018, 0.15, -0.05, 0, 0, legC, { seg: 5 });
+  b.cyl(0.014, 0.018, 0.15, 0.05, 0, 0, legC, { seg: 5 });
+  b.blob(0.14, 0, 0.26, 0, feather, { detail: 1, lump: 0.05, sy: 1.05, sz: 1.25 });  // body
+  b.blob(0.075, 0, 0.42, 0.15, feather, { detail: 1, lump: 0.03 });  // head
+  b.cone(0.028, 0.08, 0, 0.4, 0.24, beak, { seg: 6, rx: 1.35 });     // beak
+  b.box(0.05, 0.07, 0.03, 0, 0.47, 0.13, comb);                      // comb
+  b.box(0.03, 0.05, 0.04, 0, 0.35, 0.2, comb);                       // wattle
+  b.box(0.1, 0.16, 0.05, 0, 0.3, -0.17, feather, { rx: -0.55 });     // tail
   return b.build();
 }
 
@@ -105,7 +133,8 @@ export class Life {
 
   _newPerson(i) {
     const home = this.homes.length ? this.homes[i % this.homes.length] : null;
-    const x = home ? home.x + (Math.random() * 4 - 2) : 0, z = home ? home.z + (Math.random() * 4 - 2) : 0;
+    const rx = (3.2 + Math.random() * 2) * (Math.random() < 0.5 ? -1 : 1), rz = (3.2 + Math.random() * 2) * (Math.random() < 0.5 ? -1 : 1);
+    const x = home ? home.x + rx : 0, z = home ? home.z + rz : 0;
     return { home, x, z, path: null, seg: 0, idle: Math.random() * 4, speed: 1.1 + Math.random() * 0.5, yaw: 0, phase: Math.random() * 6.28, tint: new THREE.Color(TINTS[i % TINTS.length]) };
   }
 

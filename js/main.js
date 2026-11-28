@@ -51,7 +51,7 @@ async function boot() {
   const perf = new PerformanceMonitor(world, gfx);
   if (gfx.auto) perf.startAuto(gfx.preset === 'custom' ? 'medium' : gfx.preset);
 
-  const settingsState = { wind: 0.6, cloud: 0.45, grid: false, quality: 'auto', disasters: true };
+  const settingsState = { wind: 0.6, cloud: 0.45, grid: false, quality: 'auto', disasters: true, evFreq: 'normal', evPower: 'normal' };
   const settings = {
     get: () => ({ ...settingsState }),
     apply(o) {
@@ -59,6 +59,8 @@ async function boot() {
       if (o.cloud !== undefined) { settingsState.cloud = o.cloud; world.cloud = o.cloud; }
       if (o.grid !== undefined) { settingsState.grid = !!o.grid; tools.setGridAlways(!!o.grid); }
       if (o.disasters !== undefined) { settingsState.disasters = !!o.disasters; if (gameMode?.mode === 'sandbox') sim.events.setAutoEnabled(!!o.disasters); }
+      if (o.evFreq !== undefined) { settingsState.evFreq = o.evFreq; sim.events.setFrequency(o.evFreq); }
+      if (o.evPower !== undefined) { settingsState.evPower = o.evPower; if (gameMode?.mode !== 'campaign') sim.events.setIntensity({ mild: 0.6, normal: 1, severe: 1.5 }[o.evPower] || 1); }
       if (o.save !== false) save?.markDirty();
     },
   };
@@ -72,6 +74,27 @@ async function boot() {
   sim.events.on('warn', (a) => ui.banner(trI('camp.event.soon', { ev: trI('ev.' + a.type), h: i18n.num(a.hours) }), trI('ok'), () => {}));
   sim.events.on('start', (a) => { if (gameMode.mode === 'sandbox') ui.toast(trI('camp.event.start', { ev: trI('ev.' + a.type) }), 'warn'); });
   sim.events.on('end', (a) => { if (gameMode.mode === 'sandbox') ui.toast(trI('camp.event.end', { ev: trI('ev.' + a.type) }), 'ok'); });
+
+  // sandbox disaster chip (active event or countdown to the warned one) + storm lightning + drought haze
+  {
+    const chip = document.createElement('div'); chip.id = 'sb-ev-chip'; chip.className = 'glass sb-evchip'; chip.hidden = true;
+    const flash = document.createElement('div'); flash.className = 'sb-flash';
+    const haze = document.createElement('div'); haze.className = 'sb-haze';
+    document.body.append(chip, flash, haze);
+    let nextBolt = 0;
+    setInterval(() => {
+      const ev = sim.events.active, a = sim.events.auto, sb = gameMode.mode === 'sandbox';
+      let txt = '';
+      if (sb && ev) txt = `${trI('ev.' + ev.type)} · ${i18n.num(Math.max(1, Math.ceil(ev.remaining)))} h`;
+      else if (sb && a.enabled && a.warned && isFinite(a.nextAt)) txt = trI('camp.event.soon', { ev: trI('ev.' + a.nextType), h: i18n.num(Math.max(1, Math.ceil(a.nextAt - sim.events._t))) });
+      chip.hidden = !txt; if (txt) chip.textContent = txt;
+      haze.style.opacity = ev && ev.type === 'drought' ? '1' : '0';
+      if (ev && ev.type === 'storm' && performance.now() > nextBolt) {
+        nextBolt = performance.now() + 2500 + Math.random() * 7000;
+        flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
+      }
+    }, 400);
+  }
   let preview = null;
   ui.openPreview = async () => {
     if (!preview) { const { AssetPreview } = await import('./asset-preview.js'); preview = new AssetPreview(world, ui); window.TERRA.preview = preview; }
@@ -92,8 +115,9 @@ async function boot() {
 
   // debug / test hook (harmless in production)
   world.assets = new AssetManager(world);
-  world.assets.loadManifest().catch(() => {});
+  if (!new URLSearchParams(location.search).has('noassets')) world.assets.loadManifest().catch(() => {});
   window.TERRA = { gameMode, campaign: gameMode.campaign, openPreview: () => ui.openPreview(), world, sim, tools, controls, ui, save, perf, settings, gfx, gfxUI, caps };
+  window.TERRA.traffic = world.traffic;
 
   // refresh-rate probe (enables 90/120 FPS targets only when the display can show them)
   measureRefresh().then((hz) => { gfx.refreshHz = hz; if (gfxUI.isOpen) gfxUI.refresh(); });
@@ -155,12 +179,22 @@ async function boot() {
         'sig=' + (world.life && world.life._sig !== undefined ? world.life._sig : 'x'),
         'frames=' + (world._frames ?? 'x') + ' blds=' + (world.buildings ? world.buildings.buildings.size : 'x'),
         'hour=' + (sim.hour != null ? sim.hour.toFixed(1) : 'x') + ' day=' + (world.env && world.env.state ? world.env.state.dayAmt.toFixed(2) : 'x'),
+        'fw=' + (window.__fw || 0),
+        'fwq=' + (window.__fwQ || 0) + ' fwp=' + (window.__fwP || 'x'),
         'err=' + (window.__lifeErr || 'none'),
         'gerr=' + (window.__err || 'none'),
+        'env=' + (world.scene && world.scene.environment ? 1 : 0) + (window.__envErr ? ' envE=' + window.__envErr.slice(0, 80) : '') + ' lake=' + (world.field && world.field.lake ? (world.field.lake.u * 384 - 192).toFixed(0) + ',' + (world.field.lake.v * 384 - 192).toFixed(0) : 'x') + ' riv=' + (() => { try { const s = world.water && world.water.vx ? world.water : (world.water && world.water.sim); if (!s || !s.vx) return 'x'; let best = 0, bi = 0; for (let k = 0; k < s.vx.length; k += 7) { const sp = s.vx[k] * s.vx[k] + s.vz[k] * s.vz[k]; if (s.depth[k] > 0.05 && sp > best) { best = sp; bi = k; } } const n = Math.sqrt(s.vx.length); let b2 = 0, bi2 = 0; for (let k = 0; k < s.vx.length; k += 5) { const sp = s.vx[k] * s.vx[k] + s.vz[k] * s.vz[k]; if (s.depth[k] > 0.3 && s.ground[k] < 30 && sp > b2) { b2 = sp; bi2 = k; } } const r1 = ((bi % n) * 3 - 192).toFixed(0) + ',' + (Math.floor(bi / n) * 3 - 192).toFixed(0) + ' sp=' + Math.sqrt(best).toFixed(1); const r2 = ((bi2 % n) * 3 - 192).toFixed(0) + ',' + (Math.floor(bi2 / n) * 3 - 192).toFixed(0) + ' sp=' + Math.sqrt(b2).toFixed(1); return r1 + ' riv2=' + r2; } catch (e) { return 'e'; } })(),
         world.life && world.life.people[0] ? 'p0=' + world.life.people[0].x.toFixed(0) + ',' + world.life.people[0].z.toFixed(0) + (world.life.people[0].path ? ' walk' : ' idle') : '',
         world.life && world.life.animals[0] ? 'a0=' + world.life.animals[0].x.toFixed(0) + ',' + world.life.animals[0].z.toFixed(0) : '',
       ].join(' ');
-      }, 9000);
+      }, 15000);
+      if (q.get('demo') === 'walker') {
+        // debug: two isolated homes + a road between them, open ground (Stage I close-ups)
+        const bs = world.buildings;
+        for (let i = 42; i <= 56; i++) bs.placeRoad(i, 44);
+        bs.place('house_small', 42, 41, 0, { force: true, silent: true });
+        bs.place('house_small', 54, 46, 0, { force: true, silent: true });
+      }
       if (q.get('demo') === 'buildings') {
         const bs = world.buildings;
         let placed = 0;
@@ -186,14 +220,17 @@ async function boot() {
         // debug: lock the camera onto the first walking resident (Stage I captures)
         const origFrame = world.frame.bind(world);
         world.frame = (dt, sm) => {
+          window.__fw = (window.__fw || 0) + 1;
           origFrame(dt, sm);
           const ppl = world.life && world.life.people.filter((pp) => {
             if (!pp.path || !pp.path[pp.seg]) return false;
             for (const b of world.buildings.buildings.values()) { const kd = b.key && b.key.indexOf('house') === 0 ? 9 : 12; if (Math.hypot(b.x - pp.x, b.z - pp.z) < kd) return false; }
             return true;
           });
+          window.__fwQ = (window.__fwQ || 0) + (ppl && ppl.length ? 1 : 0);
           const p = ppl && ppl[0];
           if (!p) return;   // nobody walking right now: keep the last good framing
+          window.__fwP = p.x.toFixed(0) + ',' + p.z.toFixed(0);
           const g = world.rig.goal;
           g.target.set(p.x, world.field.heightAt(p.x, p.z) + 1, p.z);
           g.yaw = p.yaw + 2.9; g.pitch = 0.42; g.dist = 11;
